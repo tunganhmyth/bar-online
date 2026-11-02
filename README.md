@@ -1,3 +1,15 @@
+# MythMaker — TikTok LIVE
+
+Bản này đã chuyển phần kết nối sang TikTok, lấy từ `tiktok-live-temple-rpc-main`.
+Sân khấu đã chuyển sang 3D: nhân vật nhảy có xương, tóc/trang phục nhiều màu,
+sàn ô neon hồng/xanh, đèn quét và camera tự quay cận cảnh người tặng quà.
+Mở `http://localhost:8080/`, nhập `@username` hoặc link live rồi nhấn **Kết nối**.
+Nhấn **Thử camera quà** để xem chuyển cảnh trước khi mở LIVE.
+
+Hướng dẫn cài đặt, chạy, kiểm tra và dùng OBS: **[SETUP.vi.md](SETUP.vi.md)**.
+
+## README gốc
+
 这是一个用web山寨修勾夜店的项目，兼容b站，tiktok，抖音，大家随便玩玩，有意见和想法可以评论告诉我
 
 unity版本目前支持tiktok弹幕，抖音弹幕，B站弹幕

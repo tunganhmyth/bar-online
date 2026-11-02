@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MythMaker · TikTok LIVE</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/css/live.css" />
+    <script src="/js/jquery.min.js" defer></script>
+    <script src="/js/confetti.js" defer></script>
+    <script src="/js/live.js" defer></script>
+  </head>
+  <body>
+    <header class="controls">
+      <div class="heading">
+        <strong>MythMaker</strong><span>TikTok LIVE</span>
+      </div>
+      <form id="connect-form">
+        <label for="username">Kênh TikTok</label>
+        <input
+          id="username"
+          name="username"
+          th:value="${username}"
+          placeholder="@username hoặc link TikTok Live"
+          maxlength="512"
+          autocomplete="off"
+          required
+        />
+        <button id="connect" type="submit">Kết nối</button>
+        <button id="disconnect" type="button" class="secondary" disabled>
+          Ngắt kết nối
+        </button>
+      </form>
+      <div class="live-status" role="status" aria-live="polite">
+        <span id="status">Chưa kết nối TikTok</span>
+        <span id="viewers">0 người xem</span>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <p class="hint">
+        Kênh cần đang phát LIVE. Người xem vào phòng hoặc bình luận sẽ xuất hiện
+        trên sàn nhảy. Bình luận “đổi chó” để đổi nhân vật.
+      </p>
+      <div class="audio-row">
+        <span>Nhạc nền</span
+        ><audio id="music" controls autoplay loop preload="auto"></audio>
+      </div>
+    </header>
+    <main>
+      <div id="wutai" class="stage" aria-label="Sàn nhảy TikTok Live">
+        <img class="backdrop upper" src="/img/bg2.jpg" alt="" />
+        <img class="backdrop lower" src="/img/bg1.png" alt="" />
+        <img class="dj" src="/img/dj.gif" alt="DJ" />
+        <div id="dogs"></div>
+        <div id="activity" class="activity" aria-live="polite"></div>
+      </div>
+    </main>
+    <canvas id="canvas" aria-hidden="true"></canvas>
+    <button id="enable-music" type="button" hidden>Bật nhạc</button>
+    <button id="show-controls" type="button" hidden>Hiện điều khiển</button>
+  </body>
+</html>

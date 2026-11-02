@@ -1,0 +1,20 @@
+{
+  "name": "xiugou-tiktok-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TikTok LIVE connector for the XiuGou dance floor",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-frontend.mjs",
+    "test": "node --test bridge/live-bridge.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.187.0",
+    "tiktok-live-connector": "2.5.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
