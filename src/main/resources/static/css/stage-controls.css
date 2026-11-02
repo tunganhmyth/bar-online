@@ -1,0 +1,24 @@
+.host-form { margin: 0 0 18px; }
+.host-input-row { display: flex; align-items: stretch; gap: 7px; }
+.host-input-row .input-wrap { flex: 1; min-width: 0; }
+.host-input-row button { flex-shrink: 0; padding: 0 10px; background: #39243b; border: 1px solid #704764; border-radius: 6px; font-size: 9px; }
+.host-input-row button:hover { background: #4c2d4c; }
+.host-hint { display: block; margin-top: 8px; color: #8c758e; font-size: 8px; line-height: 1.7; }
+.camera-picker { margin-bottom: 10px; }
+.camera-picker select { width: 100%; padding: 11px 9px; color: #e7d4ee; background: #17121e; border: 1px solid #49314e; border-radius: 6px; font: inherit; font-size: 10px; cursor: pointer; }
+.camera-picker select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.camera-picker select:disabled { opacity: .5; cursor: default; }
+.settings-status { display: block; min-height: 12px; margin-top: 7px; color: #83718d; font-size: 8px; line-height: 1.6; }
+.settings-status.is-error { color: #efa1bc; }
+.character-label.host-label { border-color: #dcb575; box-shadow: 0 2px 12px #0008, 0 0 12px #dcb57518; }
+.host-label .character-initial { color: #ffe5ac; border-color: #ca9d5b; background: linear-gradient(135deg, #795132, #2d2136); }
+.host-label small { color: #f0c78c; }
+.host-label:after { border-color: #dcb575; }
+@media (min-width: 701px) {
+  .controls { max-height: calc(100dvh - 76px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4b3554 transparent; }
+}
+@media (max-width: 700px) {
+  .host-input-row { flex-wrap: wrap; }
+  .host-input-row .input-wrap { flex-basis: 100%; }
+  .host-input-row button { padding: 8px 11px; }
+}

@@ -80,18 +80,46 @@ Stop-Process -Id (Get-Content .\.run\server.pid)
 - Nhân vật người 3D có skeleton và animation nhảy; 8 phối màu tóc/trang phục.
   Model nền là HVGirl (Babylon.js Assets), được chỉnh tỷ lệ và vật liệu lúc chạy.
   Credits và giấy phép ở `static/models/ATTRIBUTION.md`.
-- Chưa kết nối LIVE: 8 nhân vật trong chế độ **Xem thử**, có nhãn phân biệt.
-- Khi kết nối LIVE: chuyển sang người xem thật; mỗi người vào phòng có nhân vật riêng.
+- Mở sàn sẽ có đúng **1 nhân vật chủ sàn** ở giữa sàn. Nhập tên ở mục
+  **Tên chủ sàn** rồi nhấn **Áp dụng**; tên được lưu sau khi khởi động lại
+  server và đồng bộ ngay sang tab OBS. Chủ sàn không bị dọn theo thời gian.
+- Nhấn **Xem thử** để thêm 8 nhân vật mẫu, có nhãn phân biệt. Khi kết nối
+  LIVE, chỉ giữ chủ sàn và bắt đầu nhận người xem mới qua bình luận/quà.
+- Khi kết nối LIVE: sàn bắt đầu trống. Chỉ **bình luận hoặc tặng quà** mới tạo
+  nhân vật; vào phòng, tim, follow hoặc chia sẻ không tự đưa người mới lên sàn.
 - Bình luận: hiển thị nội dung trên nhân vật; tên và bình luận dùng văn bản thuần.
 - Bình luận `đổi đồ`, `doi do`, `đổi nhân vật`: đổi phối màu nhân vật.
   Các lệnh `đổi chó` / `đổi cún` cũ vẫn được nhận.
-- Tim, follow, chia sẻ: nhân vật nhảy và hiện tương tác.
-- Quà: camera tiến đến đúng người tặng, giữ góc cận cảnh rồi quay về toàn sàn
+- Tim, follow, chia sẻ: chỉ nhân vật đã có trên sàn mới nhảy và hiện tương tác.
+- Sau **10 phút không tương tác**, nhân vật tự rời sàn; bình luận, quà hoặc
+  tương tác của người đã trên sàn sẽ gia hạn thời gian. Cả nhãn tên, animation,
+  bộ đếm và hàng chờ camera đều được dọn. Thời gian tính theo đồng hồ thực,
+  kể cả khi tab/OBS không render. Tắt LIVE/ngắt kết nối sẽ dọn người xem,
+  giữ lại nhân vật chủ sàn.
+- TikTok không đảm bảo sự kiện rời phòng cho từng người. Vì vậy đây là dọn theo
+  thời gian không tương tác, không phải xác nhận người đó đã thoát LIVE;
+  người vẫn xem nhưng im lặng đủ 10 phút cũng sẽ được dọn.
+  Tham khảo: https://ttlc.docs.isaackogan.com/guides/room-data/
+- Quà: camera tiến đến đúng người tặng, giữ góc cận cảnh rồi trở về chế độ đã chọn
   sau khoảng 6,4 giây. Có vòng sáng dưới chân và bảng tên/quà. Combo được gộp;
   hàng chờ tối đa 8 người, người đang được camera quay không bị đẩy khỏi sàn.
 - **Thử camera quà** phát hiệu ứng thử, được ghi rõ nhãn trên màn hình.
-- Có thể kéo/zoom sân khấu, bật camera xoay chậm, bật/tắt đèn, đổi trang phục
-  và chuyển tỷ lệ 9:16 / 16:9 bằng bảng điều khiển.
+- Chọn 8 chế độ camera: **Toàn sàn, Chính diện, Chéo trái, Chéo phải,
+  Từ trên cao, Xoay chậm, Cận cảnh nhân vật, Hỗn hợp tự động**. Hỗn hợp đổi
+  giữa 6 góc mỗi 5 giây, chuyển cảnh mượt và không dùng góc từ trên đầu xuống.
+  Cận cảnh lần lượt quay từng người. Camera tự động và kéo chuột đều giới hạn
+  ở cung phía trước sân khấu để không đi ra sau tường.
+  Camera quà luôn được ưu tiên; sau đó tiếp tục chế độ đã chọn. Nút
+  **Góc máy toàn sàn** hủy hàng chờ quà và trở về góc ban đầu.
+- Các góc cố định cho phép kéo/zoom; xoay chậm, cận cảnh và hỗn hợp tự điều
+  khiển camera. Có thể bật/tắt đèn, đổi trang phục và chọn 9:16 / 16:9.
+- Nút **Đèn laser** bật/tắt riêng 36 tia laser đa sắc quét hình quạt. Cài đặt
+  được lưu và đồng bộ sang OBS, độc lập với nút đèn sân khấu.
+- Tên chủ sàn và chế độ camera dùng chung trên server, lưu ở
+  `data/stage-settings.json` (không đưa lên Git). API:
+  `GET /api/stage/settings`, `PUT /api/stage/settings` với `hostName` hoặc
+  `cameraMode` hoặc `laserEnabled` (boolean); thay đổi được đồng bộ qua SSE. Cần khởi động lại server sau
+  khi cập nhật bản code có API mới này.
 - Nhạc nền Vinahouse tự phát và lặp lại khi hết bài. Nếu trình duyệt chặn tự phát
   có âm thanh, nhấn **Bật nhạc** hoặc tương tác với trang một lần để bắt đầu;
   nút này xuất hiện cả trong chế độ OBS.
@@ -103,6 +131,23 @@ Kết nối kênh trong trang điều khiển trước, sau đó thêm OBS Brows
 Nếu cần khung ngang, dùng **http://localhost:8080/?obs=1&layout=wide**,
 kích thước **1920 × 1080**.
 Các tab dùng chung kênh TikTok của server; tab OBS tự nhận tương tác mới.
+
+Sau khi cập nhật code, tải lại trang điều khiển và Browser Source trong OBS
+để cùng áp dụng luật lên sàn mới.
+
+Kiểm tra quy tắc lên sàn/dọn người (cần server local đang chạy và Microsoft Edge):
+
+```powershell
+npm.cmd run test:presence
+```
+
+Test sử dụng sự kiện và thời gian giả lập trong trình duyệt riêng, không thay
+đổi kết nối TikTok đang chạy.
+
+Kiểm tra camera, lưu tên và đồng bộ OBS: chạy một server thử ở cổng 8081 với
+`--stage.settings-file=.run/preview-stage-settings.json`, rồi dùng
+`npm.cmd run test:camera`. Test dùng API cài đặt thật trên server thử,
+khôi phục cài đặt sau khi chạy và không kết nối TikTok.
 
 ## Phần kết nối được lấy từ đâu
 

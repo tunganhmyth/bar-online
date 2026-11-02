@@ -3,3 +3,4 @@
 *.iml
 /.run/
 /node_modules/
+/data/stage-settings.json

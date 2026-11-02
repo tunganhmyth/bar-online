@@ -28,6 +28,14 @@ const SLOT_POSITIONS = [
 const DEMO_USERS = ['Mina', 'Luna', 'Kira', 'Yuna', 'Sora', 'Ruby', 'Hana', 'Yuki'];
 const hash = (text) => [...text].reduce((n, ch) => ((n * 31 + ch.charCodeAt(0)) >>> 0), 0);
 const ease = (t) => t * t * (3 - 2 * t);
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+const HOST_ID = 'stage:host';
+const CAMERA_LABELS = {
+  overview: 'Toàn sàn', front: 'Chính diện', left: 'Chéo trái', right: 'Chéo phải',
+  overhead: 'Từ trên cao', orbit: 'Xoay chậm', closeup: 'Cận cảnh nhân vật', mixed: 'Hỗn hợp tự động'
+};
+const MIXED_SHOTS = ['overview', 'left', 'front', 'right', 'closeup', 'orbit'];
+const SHOT_SECONDS = 5;
 
 function textureCanvas(width, height, draw) {
   const canvas = document.createElement('canvas');
@@ -58,8 +66,11 @@ window.createClubScene = function createClubScene(container) {
   controls.enablePan = false;
   controls.minDistance = 4;
   controls.maxDistance = 27;
-  controls.minPolarAngle = 0.42;
+  controls.minPolarAngle = 0.1;
   controls.maxPolarAngle = 1.4;
+  // Keep manual drags in the same front-facing arc as automatic shots.
+  controls.minAzimuthAngle = -Math.PI / 3;
+  controls.maxAzimuthAngle = Math.PI / 3;
   controls.target.set(0, 1, -0.5);
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
@@ -87,7 +98,15 @@ window.createClubScene = function createClubScene(container) {
   let width = 1, height = 1;
   let preview = false;
   let lightsOn = true;
-  let orbit = false;
+  let laserEnabled = false;
+  let hostName = 'Chủ sàn';
+  let cameraMode = 'overview';
+  let cameraShot = 'overview';
+  let directorEpoch = 0;
+  let shotEpoch = 0;
+  let shotKey = '';
+  let closeupTarget = HOST_ID;
+  let cameraTransition = null;
   let disposed = false;
   let renderTime = 0;
   let frameCount = 0;
@@ -243,6 +262,21 @@ window.createClubScene = function createClubScene(container) {
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2) }));
     lamp.position.copy(origin); lamp.position.y -= 0.17; scene.add(lamp);
   }
+  // Two laser fans; instancing keeps all 36 thin beams in one draw call.
+  const laserCount = 36;
+  const laserUp = new THREE.Vector3(0, 1, 0);
+  const laserDirection = new THREE.Vector3();
+  const laserEnd = new THREE.Vector3();
+  const lasers = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 6),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }), laserCount);
+  const laserOrigins = [new THREE.Vector3(-7.5, 5.4, -8.8), new THREE.Vector3(7.5, 5.4, -8.8)];
+  for (let i = 0; i < laserCount; i++) {
+    lasers.setColorAt(i, new THREE.Color(i % 3 === 0 ? '#57ff99' : i % 3 === 1 ? '#28e5ff' : '#ff3be6').multiplyScalar(1.5));
+  }
+  lasers.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  lasers.frustumCulled = false;
+  lasers.visible = false;
+  scene.add(lasers);
   const focusLight = new THREE.PointLight('#ffce72', 0, 7, 2);
   scene.add(focusLight);
   const giftRing = new THREE.Mesh(new THREE.RingGeometry(0.83, 0.86, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffc861').multiplyScalar(2.5), side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
@@ -255,7 +289,12 @@ window.createClubScene = function createClubScene(container) {
     camera.fov = portrait ? 55 : 43;
     camera.updateProjectionMatrix();
     homePosition.set(portrait ? 0.3 : 1.2, portrait ? 3.6 : 4.5, portrait ? 16.3 : 16.0);
-    if (!activeGift) { camera.position.copy(homePosition); controls.target.copy(homeTarget); controls.update(); }
+    if (!activeGift) {
+      shotKey = ''; cameraTransition = null;
+      if (cameraMode === 'overview') {
+        camera.position.copy(homePosition); controls.target.copy(homeTarget); controls.update();
+      }
+    }
   }
   const resize = new ResizeObserver(() => {
     const rect = container.getBoundingClientRect();
@@ -268,14 +307,15 @@ window.createClubScene = function createClubScene(container) {
   });
   resize.observe(container);
 
-  function actorLabel(user, isDemo) {
+  function actorLabel(user, isDemo, isHost) {
     const label = document.createElement('div');
     label.className = 'character-label';
     label.dataset.user = String(user.uniqueId);
+    if (isHost) label.classList.add('host-label');
     const badge = document.createElement('span'); badge.className = 'character-initial';
-    badge.textContent = String(user.nickname || '?').slice(0, 1).toUpperCase();
+    badge.textContent = isHost ? '♛' : String(user.nickname || '?').slice(0, 1).toUpperCase();
     const text = document.createElement('div'); text.className = 'character-label-text';
-    const tag = document.createElement('small'); tag.textContent = isDemo ? 'DANCER · XEM THỬ' : 'TIKTOK LIVE';
+    const tag = document.createElement('small'); tag.textContent = isHost ? 'Chủ sàn' : isDemo ? 'Dân chơi · XEM THỬ' : 'Dân chơi';
     const name = document.createElement('strong'); name.textContent = String(user.nickname || user.uniqueId).slice(0, 40);
     text.append(tag, name); label.append(badge, text);
     const message = document.createElement('div'); message.className = 'character-message'; message.hidden = true;
@@ -327,20 +367,25 @@ window.createClubScene = function createClubScene(container) {
 
   function addParticipant(user, isDemo = false) {
     const id = String(user.uniqueId || user.nickname || 'viewer');
-    if (actors.has(id)) return actors.get(id);
+    const isHost = id === HOST_ID;
+    if (actors.has(id)) {
+      const actor = actors.get(id);
+      actor.lastActiveAt = Date.now();
+      return actor;
+    }
     if (actors.size >= SLOT_POSITIONS.length) {
-      const removable = [...actors.values()].find((actor) => activeGift?.id !== actor.id && !focusQueue.some((job) => job.id === actor.id));
+      const removable = [...actors.values()].find((actor) => !actor.isHost && activeGift?.id !== actor.id && !focusQueue.some((job) => job.id === actor.id));
       if (removable) removeParticipant(removable.id);
     }
-    let slot = 0;
+    let slot = isHost ? 2 : 0;
     while (positions.has(slot)) slot++;
     positions.add(slot);
     const group = new THREE.Group();
     group.position.set(SLOT_POSITIONS[slot][0], 0.025, SLOT_POSITIONS[slot][1]);
     group.rotation.y = -0.12 + (hash(id) % 5) * 0.055;
     scene.add(group);
-    const label = actorLabel({ ...user, uniqueId: id }, isDemo);
-    const actor = { id, user, isDemo, slot, group, ...label, variant: hash(id) % PALETTES.length, seed: hash(id), materials: [], reactUntil: 0, messageUntil: 0 };
+    const label = actorLabel({ ...user, uniqueId: id }, isDemo, isHost);
+    const actor = { id, user, isDemo, isHost, slot, group, ...label, variant: hash(id) % PALETTES.length, seed: hash(id), materials: [], reactUntil: 0, messageUntil: 0, lastActiveAt: Date.now() };
     actors.set(id, actor);
     attachModel(actor);
     container.dataset.actorCount = actors.size;
@@ -348,23 +393,38 @@ window.createClubScene = function createClubScene(container) {
     return actor;
   }
 
-  function removeParticipant(id) {
+  function removeParticipant(id, force = false) {
     const actor = actors.get(id);
-    if (!actor) return;
+    if (!actor || (actor.isHost && !force)) return;
+    // Remove queued shots as well, so an expired viewer cannot block the queue.
+    for (let i = focusQueue.length - 1; i >= 0; i--) {
+      if (focusQueue[i].id === id) focusQueue.splice(i, 1);
+    }
+    if (activeGift?.id === id) clearActiveGift();
     actor.mixer?.stopAllAction();
     if (actor.mixer) { actor.mixer.uncacheRoot(actor.model); mixers.delete(actor.mixer); }
+    actor.model?.traverse((child) => { if (child.isSkinnedMesh) child.skeleton.dispose(); });
     actor.materials.forEach((material) => material.dispose());
     actor.label.remove();
     scene.remove(actor.group);
     positions.delete(actor.slot);
     actors.delete(id);
+    container.dataset.actorCount = actors.size;
+    onEvent('club:participants', { count: actors.size, preview });
+  }
+
+  function removeInactiveParticipants() {
+    const now = Date.now();
+    const expired = [...actors.values()].filter((actor) => !actor.isDemo && !actor.isHost && now - actor.lastActiveAt >= INACTIVITY_TIMEOUT_MS);
+    // Drop every expired queued viewer before starting another close-up.
+    expired.forEach((actor) => removeParticipant(actor.id));
+    if (!activeGift && focusQueue.length) startGift(focusQueue.shift());
   }
 
   function resetParticipants() {
     resetCamera();
-    [...actors.keys()].forEach(removeParticipant);
-    container.dataset.actorCount = 0;
-    onEvent('club:participants', { count: 0, preview });
+    [...actors.values()].filter((actor) => !actor.isHost).forEach((actor) => removeParticipant(actor.id));
+    ensureHost();
   }
 
   function setPreview(enabled) {
@@ -378,16 +438,32 @@ window.createClubScene = function createClubScene(container) {
     });
   }
 
-  function showMessage(user, text) {
-    const actor = addParticipant(user);
+  function ensureHost() {
+    return actors.get(HOST_ID) || addParticipant({ uniqueId: HOST_ID, nickname: hostName });
+  }
+
+  function setHostName(value) {
+    hostName = String(value || '').trim().slice(0, 40) || 'Chủ sàn';
+    const host = ensureHost();
+    host.user = { ...host.user, nickname: hostName };
+    host.label.querySelector('strong').textContent = hostName;
+    return hostName;
+  }
+
+  function showMessage(user, text, admit = true) {
+    const id = String(user.uniqueId || user.nickname || 'viewer');
+    const actor = admit ? addParticipant(user) : actors.get(id);
+    if (!actor) return null;
+    actor.lastActiveAt = Date.now();
     actor.message.textContent = String(text).slice(0, 160);
     actor.message.hidden = false;
     actor.messageUntil = elapsed + 4.5;
     return actor;
   }
 
-  function react(user, text) {
-    const actor = showMessage(user, text);
+  function react(user, text, admit = false) {
+    const actor = showMessage(user, text, admit);
+    if (!actor) return null;
     actor.reactUntil = elapsed + 1.8;
     return actor;
   }
@@ -407,7 +483,7 @@ window.createClubScene = function createClubScene(container) {
   }
 
   function focusGift(user, data) {
-    const actor = react(user, `🎁 ${data.count || 1} × ${data.giftName || 'Quà tặng'}`);
+    const actor = react(user, `🎁 ${data.count || 1} × ${data.giftName || 'Quà tặng'}`, true);
     if (activeGift?.id === actor.id && elapsed < activeGift.until - 1) {
       activeGift.until = Math.min(activeGift.started + 11, elapsed + 4);
       activeGift.data = { ...data, count: (Number(activeGift.data.count) || 1) + (Number(data.count) || 1) };
@@ -423,18 +499,95 @@ window.createClubScene = function createClubScene(container) {
     }
   }
 
-  function resetCamera() {
+  function resumeDirector() {
+    directorEpoch = elapsed;
+    shotKey = ''; cameraTransition = null;
+    controls.autoRotate = false;
+    container.dataset.cameraMode = cameraMode;
+    onEvent('club:camera-mode', { mode: cameraMode, shot: cameraMode === 'mixed' ? 'overview' : cameraMode, label: CAMERA_LABELS[cameraMode] });
+  }
+
+  function clearActiveGift() {
     if (activeGift) actors.get(activeGift.id)?.label.classList.remove('featured');
     activeGift = null;
-    focusQueue.length = 0;
-    controls.enabled = true;
-    controls.autoRotate = orbit;
     giftRing.visible = false;
     focusLight.intensity = 0;
-    container.dataset.cameraMode = 'overview';
     delete container.dataset.focusedUser;
-    camera.position.copy(homePosition); controls.target.copy(homeTarget); controls.update();
+    resumeDirector();
     onEvent('club:gift-end', {});
+  }
+
+  function resetCamera() {
+    focusQueue.length = 0;
+    clearActiveGift();
+  }
+
+  function setCameraMode(value, cancelGift = false) {
+    if (!Object.hasOwn(CAMERA_LABELS, value)) return false;
+    if (cancelGift) resetCamera();
+    if (cameraMode === value && shotKey && !cancelGift) return true;
+    cameraMode = value;
+    if (!activeGift) resumeDirector();
+    else onEvent('club:camera-mode', { mode: cameraMode, shot: 'gift', label: CAMERA_LABELS[cameraMode] });
+    return true;
+  }
+
+  function chooseCloseup(index) {
+    const candidates = [...actors.values()];
+    closeupTarget = candidates[index % Math.max(1, candidates.length)]?.id || HOST_ID;
+  }
+
+  function directorPose(shot) {
+    const portrait = width / height < 0.9;
+    const target = homeTarget.clone();
+    let position = homePosition.clone();
+    if (shot === 'front') position.set(0, 2.6, portrait ? 15.6 : 13.5);
+    if (shot === 'left') position.set(-10, 4.4, 13.5);
+    if (shot === 'right') position.set(10, 4.4, 13.5);
+    if (shot === 'overhead') { position.set(0.05, portrait ? 21 : 23, 2.8); target.set(0, 0.2, -0.7); }
+    if (shot === 'orbit') {
+      const angle = Math.sin((elapsed - shotEpoch) * 0.19) * 0.95;
+      const radius = portrait ? 16.3 : 16;
+      position.set(Math.sin(angle) * radius, 4.1 + Math.sin(elapsed * 0.25) * 0.35, target.z + Math.cos(angle) * radius);
+    }
+    if (shot === 'closeup') {
+      const actor = actors.get(closeupTarget) || actors.get(HOST_ID);
+      if (actor) {
+        target.copy(actor.group.position).add(new THREE.Vector3(0, 1.05, 0));
+        position.copy(actor.group.position).add(new THREE.Vector3(1.3, 2.1, 5.1));
+      }
+    }
+    return { position, target };
+  }
+
+  function updateDirector() {
+    const cycle = Math.floor(Math.max(0, elapsed - directorEpoch) / SHOT_SECONDS);
+    const shot = cameraMode === 'mixed' ? MIXED_SHOTS[cycle % MIXED_SHOTS.length] : cameraMode;
+    const nextKey = shot + (shot === 'closeup' ? ':' + cycle : '');
+    if (nextKey !== shotKey || (shot === 'closeup' && !actors.has(closeupTarget))) {
+      shotKey = nextKey; cameraShot = shot; shotEpoch = elapsed;
+      if (shot === 'closeup') chooseCloseup(cycle);
+      controls.autoRotate = false;
+      // Clear leftover orbit damping before the director takes ownership.
+      controls.enableDamping = false; controls.update(); controls.enableDamping = true;
+      cameraTransition = { started: elapsed, position: camera.position.clone(), target: controls.target.clone() };
+      container.dataset.cameraShot = shot;
+      onEvent('club:camera-mode', { mode: cameraMode, shot, label: CAMERA_LABELS[cameraMode] });
+    }
+    const automatic = ['mixed', 'orbit', 'closeup'].includes(cameraMode);
+    const pose = directorPose(shot);
+    if (cameraTransition) {
+      const t = ease(Math.min(1, (elapsed - cameraTransition.started) / 1.35));
+      camera.position.lerpVectors(cameraTransition.position, pose.position, t);
+      controls.target.lerpVectors(cameraTransition.target, pose.target, t);
+      controls.enabled = false;
+      camera.lookAt(controls.target);
+      if (t >= 1) cameraTransition = null;
+    } else if (automatic) {
+      camera.position.copy(pose.position); controls.target.copy(pose.target);
+      controls.enabled = false; camera.lookAt(controls.target);
+    } else controls.enabled = true;
+    if (controls.enabled) controls.update();
   }
 
   const modelReady = new GLTFLoader().loadAsync('/models/club-dancer.glb').then((gltf) => {
@@ -457,7 +610,7 @@ window.createClubScene = function createClubScene(container) {
   });
 
   function updateCamera() {
-    if (!activeGift) { controls.autoRotate = orbit; controls.autoRotateSpeed = 0.45; return; }
+    if (!activeGift) { updateDirector(); return; }
     const actor = actors.get(activeGift.id);
     if (!actor) { resetCamera(); return; }
     const age = elapsed - activeGift.started;
@@ -471,8 +624,10 @@ window.createClubScene = function createClubScene(container) {
       controls.target.lerpVectors(activeGift.fromTarget, target, t);
     } else if (remaining < 1.1) {
       const t = ease(1 - Math.max(0, remaining) / 1.1);
-      camera.position.lerpVectors(close, homePosition, t);
-      controls.target.lerpVectors(target, homeTarget, t);
+      const resumeShot = cameraMode === 'mixed' ? 'overview' : cameraMode;
+      const pose = directorPose(resumeShot);
+      camera.position.lerpVectors(close, pose.position, t);
+      controls.target.lerpVectors(target, pose.target, t);
     } else { camera.position.copy(close); controls.target.copy(target); }
     camera.lookAt(controls.target);
     focusLight.position.copy(target).add(new THREE.Vector3(0, 1.7, 1.4));
@@ -480,13 +635,7 @@ window.createClubScene = function createClubScene(container) {
     giftRing.scale.setScalar(1 + Math.sin(elapsed * 5) * 0.07);
     giftRing.material.opacity = 0.7 + Math.sin(elapsed * 8) * 0.22;
     if (remaining <= 0) {
-      actor.label.classList.remove('featured');
-      activeGift = null;
-      giftRing.visible = false; focusLight.intensity = 0;
-      controls.enabled = true;
-      container.dataset.cameraMode = 'overview';
-      delete container.dataset.focusedUser;
-      onEvent('club:gift-end', {});
+      clearActiveGift();
       const next = focusQueue.shift();
       if (next) startGift(next);
     }
@@ -513,6 +662,23 @@ window.createClubScene = function createClubScene(container) {
       mesh.scale.y = direction.length();
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction.normalize());
     });
+    lasers.visible = laserEnabled;
+    if (laserEnabled) {
+      for (let i = 0; i < laserCount; i++) {
+        const bank = Math.floor(i / 18);
+        const fan = (i % 18) / 17 - 0.5;
+        const origin = laserOrigins[bank];
+        laserEnd.set(fan * 17 + Math.sin(elapsed * 0.45 + bank * Math.PI) * 3, 0.08,
+          6 + Math.sin(elapsed * 0.6 + fan * 2 + bank) * 4);
+        laserDirection.subVectors(laserEnd, origin);
+        dummy.position.copy(origin).add(laserEnd).multiplyScalar(0.5);
+        dummy.quaternion.setFromUnitVectors(laserUp, laserDirection.clone().normalize());
+        dummy.scale.set(1, laserDirection.length(), 1);
+        dummy.updateMatrix();
+        lasers.setMatrixAt(i, dummy.matrix);
+      }
+      lasers.instanceMatrix.needsUpdate = true;
+    }
     actors.forEach((actor) => {
       if (actor.head) actor.head.scale.setScalar(0.8);
       if (actor.messageUntil && elapsed > actor.messageUntil) { actor.message.hidden = true; actor.messageUntil = 0; }
@@ -529,30 +695,37 @@ window.createClubScene = function createClubScene(container) {
       }
     });
     updateCamera();
-    if (!activeGift) controls.update();
     renderer.info.reset();
     if (lightweight) renderer.render(scene, camera);
     else composer.render();
   }
-  document.addEventListener('visibilitychange', () => clock.getDelta());
+  // Use wall-clock time rather than animation time, including hidden OBS tabs.
+  const inactivityTimer = setInterval(removeInactiveParticipants, 1000);
+  const onVisibilityChange = () => { clock.getDelta(); removeInactiveParticipants(); };
+  document.addEventListener('visibilitychange', onVisibilityChange);
   container.dataset.cameraMode = 'overview';
-  setPreview(true);
+  setPreview(false);
   requestAnimationFrame(animate);
 
   return {
     ready: modelReady,
     addParticipant,
+    removeParticipant,
     resetParticipants,
     setPreview,
+    setHostName,
+    setCameraMode,
+    setLaserEnabled(value) { laserEnabled = value === true; lasers.visible = laserEnabled; },
     showMessage,
     react,
     focusGift,
     resetCamera,
     testGift() {
       const list = [...actors.values()];
-      if (!list.length) setPreview(true);
+      if (!list.length) return false;
       const actor = [...actors.values()][Math.floor(Math.random() * actors.size)];
       focusGift(actor.user, { giftName: 'Hoa hồng', count: 5, diamonds: 5, preview: true });
+      return true;
     },
     changeAvatar(id) {
       const actor = actors.get(id) || actors.get(activeGift?.id) || actors.values().next().value;
@@ -562,16 +735,23 @@ window.createClubScene = function createClubScene(container) {
       return actor.palette;
     },
     toggleLights() { lightsOn = !lightsOn; return lightsOn; },
-    toggleOrbit() { orbit = !orbit; controls.autoRotate = orbit; return orbit; },
+    toggleOrbit() { const enabled = cameraMode !== 'orbit'; setCameraMode(enabled ? 'orbit' : 'overview'); return enabled; },
     getSnapshot(includeBounds = false) {
       return { ready: !!model, preview, actorCount: actors.size, animatedCount: mixers.size, fps: frameRate,
-        cameraMode: activeGift ? 'focus' : 'overview', focusedUser: activeGift?.id || null, queueLength: focusQueue.length,
-        camera: camera.position.toArray(), target: controls.target.toArray(), lightsOn,
-        participants: [...actors.values()].map((actor) => ({ id: actor.id, nickname: actor.user.nickname, palette: actor.palette, position: actor.group.position.toArray(), ...(includeBounds ? { bounds: new THREE.Box3().setFromObject(actor.group, true) } : {}) })),
+        cameraMode: activeGift ? 'focus' : cameraMode, selectedCameraMode: cameraMode, cameraShot,
+        shotDurationSeconds: SHOT_SECONDS, directorElapsed: elapsed - directorEpoch,
+        hostName, hostId: HOST_ID, viewerCount: [...actors.values()].filter((actor) => !actor.isHost && !actor.isDemo).length,
+        focusedUser: activeGift?.id || null, queueLength: focusQueue.length,
+        camera: camera.position.toArray(), target: controls.target.toArray(), lightsOn, laserEnabled,
+        laserBeamCount: lasers.visible ? laserCount : 0, mixedShots: [...MIXED_SHOTS],
+        inactivityTimeoutMs: INACTIVITY_TIMEOUT_MS,
+        participants: [...actors.values()].map((actor) => ({ id: actor.id, nickname: actor.user.nickname, isHost: actor.isHost, isDemo: actor.isDemo, palette: actor.palette, position: actor.group.position.toArray(), lastActiveAt: actor.lastActiveAt, ...(includeBounds ? { bounds: new THREE.Box3().setFromObject(actor.group, true) } : {}) })),
         triangles: renderer.info.render.triangles, calls: renderer.info.render.calls };
     },
     dispose() {
-      disposed = true; resetParticipants(); resize.disconnect(); controls.dispose();
+      disposed = true; clearInterval(inactivityTimer); document.removeEventListener('visibilitychange', onVisibilityChange);
+      resetCamera(); [...actors.keys()].forEach((id) => removeParticipant(id, true));
+      resize.disconnect(); controls.dispose();
       composer.dispose(); renderer.dispose();
     }
   };

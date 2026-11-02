@@ -10,6 +10,12 @@
   const loader = document.getElementById('scene-loader');
   const mode = document.getElementById('stage-mode');
   const giftFeature = document.getElementById('gift-feature');
+  const hostForm = document.getElementById('host-form');
+  const hostInput = document.getElementById('host-name');
+  const cameraSelect = document.getElementById('camera-mode');
+  const laserToggle = document.getElementById('laser-toggle');
+  const settingsStatus = document.getElementById('stage-settings-status');
+  let savedSettings = { hostName: 'Chủ sàn', cameraMode: 'overview', revision: -1 };
   let connectedUser = '';
   let isConnected = false;
   let activityTimer;
@@ -23,6 +29,25 @@
     activityTimer = setTimeout(() => { activity.textContent = ''; }, 4000);
   }
   function showError(message) { error.textContent = message || ''; error.hidden = !message; }
+  function cameraLabel(value) {
+    return [...(cameraSelect?.options || [])].find((option) => option.value === value)?.textContent || value;
+  }
+  function renderCameraStatus() {
+    const snapshot = club?.getSnapshot();
+    if (!snapshot || snapshot.focusedUser) return;
+    const selected = snapshot.selectedCameraMode;
+    document.getElementById('camera-status').textContent = (selected === 'mixed'
+      ? `HỖN HỢP · ${cameraLabel(snapshot.cameraShot)}` : cameraLabel(selected)).toLocaleUpperCase('vi');
+    const help = document.getElementById('camera-help');
+    if (help) help.textContent = ['mixed', 'orbit', 'closeup'].includes(selected) ? 'Camera tự động · Quà tặng luôn được ưu tiên' : 'Kéo để xoay góc máy';
+  }
+  stage.addEventListener('club:camera-mode', (event) => {
+    const selected = event.detail.mode;
+    if (cameraSelect) cameraSelect.value = selected;
+    document.getElementById('camera-orbit')?.setAttribute('aria-pressed', String(selected === 'orbit'));
+    document.getElementById('camera-mixed')?.setAttribute('aria-pressed', String(selected === 'mixed'));
+    renderCameraStatus();
+  });
 
   stage.addEventListener('club:ready', () => { loader.hidden = true; });
   stage.addEventListener('club:error', (event) => {
@@ -45,7 +70,7 @@
   });
   stage.addEventListener('club:gift-end', () => {
     giftFeature.hidden = true;
-    document.getElementById('camera-status').textContent = 'GÓC MÁY TOÀN SÀN';
+    renderCameraStatus();
   });
   try {
     club = window.createClubScene(stage);
@@ -57,7 +82,49 @@
     console.error(failure);
   }
 
+  function applySettings(value) {
+    if (!value || !Number.isFinite(value.revision) || value.revision < savedSettings.revision) return;
+    savedSettings = value;
+    club?.setHostName(value.hostName);
+    club?.setCameraMode(value.cameraMode);
+    club?.setLaserEnabled(value.laserEnabled === true);
+    if (laserToggle) laserToggle.setAttribute('aria-pressed', String(value.laserEnabled === true));
+    if (hostInput && document.activeElement !== hostInput) hostInput.value = value.hostName;
+    if (cameraSelect) cameraSelect.value = value.cameraMode;
+    [hostInput, cameraSelect, laserToggle, document.getElementById('save-host')].forEach((control) => { if (control) control.disabled = false; });
+    if (settingsStatus) { settingsStatus.classList.remove('is-error'); settingsStatus.textContent = 'Đã lưu · Đồng bộ cùng nguồn OBS'; }
+  }
+  function settingsError(message) {
+    if (settingsStatus) { settingsStatus.classList.add('is-error'); settingsStatus.textContent = message; }
+    else announce(message);
+  }
+  async function loadSettings() {
+    try {
+      const response = await fetch('/api/stage/settings');
+      if (!response.ok) throw new Error('Khởi động lại server để dùng cài đặt chủ sàn và camera mới.');
+      applySettings(await response.json());
+    } catch (failure) { settingsError(failure.message); }
+  }
+  async function saveSettings(patch) {
+    try {
+      const response = await fetch('/api/stage/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Không lưu được cài đặt sân khấu.');
+      applySettings(result);
+    } catch (failure) {
+      if (cameraSelect) cameraSelect.value = savedSettings.cameraMode;
+      settingsError(failure.message);
+    }
+  }
+  hostForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void saveSettings({ hostName: hostInput.value.trim() });
+  });
+  cameraSelect?.addEventListener('change', () => { void saveSettings({ cameraMode: cameraSelect.value }); });
+  void loadSettings();
+
   function updateState(state) {
+    const wasConnected = isConnected;
     isConnected = Boolean(state.connected);
     connectButton.disabled = Boolean(state.connecting);
     disconnectButton.disabled = !state.connected && !state.connecting;
@@ -67,14 +134,17 @@
       : isConnected ? `Đã kết nối @${state.username}` : 'Chưa kết nối TikTok';
     document.getElementById('viewers').textContent = `${Number(state.viewerCount) || 0} người xem`;
     showError(state.lastError);
-    mode.textContent = isConnected ? '● LIVE' : club?.getSnapshot().preview ? 'XEM THỬ' : 'ĐÃ NGẮT LIVE';
-    mode.classList.toggle('is-live', isConnected);
     if (state.username && !username.value) username.value = '@' + state.username;
+    if (wasConnected && !isConnected) {
+      connectedUser = '';
+      club?.setPreview(false);
+    }
     if (isConnected && connectedUser !== state.username) {
       connectedUser = state.username;
       club?.setPreview(false);
-      club?.addParticipant({ uniqueId: 'host:' + state.username, nickname: '@' + state.username });
     }
+    mode.textContent = isConnected ? '● LIVE' : club?.getSnapshot().preview ? 'XEM THỬ' : 'CHỜ LIVE';
+    mode.classList.toggle('is-live', isConnected);
   }
   async function request(action, body) {
     const response = await fetch('/api/live/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -95,9 +165,10 @@
 
   function handleEvent(event) {
     const data = event.data;
+    if (event.type === 'stage-settings') { applySettings(data); return; }
     if (event.type === 'state') { updateState(data); return; }
     if (!club) return;
-    if (event.type === 'member') { club.addParticipant(data); return; }
+    if (event.type === 'member') return;
     if (event.type === 'chat') {
       const command = String(data.comment || '').trim().toLocaleLowerCase('vi');
       if (['đổi đồ', 'doi do', 'đổi nhân vật', 'doi nhan vat', 'đổi chó', 'doi cho', 'đổi cún', 'doi cun', '换修勾'].includes(command)) {
@@ -128,13 +199,17 @@
     if (isConnected) return;
     connectedUser = ''; club?.setPreview(true); mode.textContent = 'XEM THỬ';
   });
-  document.getElementById('test-gift').addEventListener('click', () => club?.testGift());
+  document.getElementById('test-gift').addEventListener('click', () => {
+    if (club && !club.testGift()) announce('Chưa có ai trên sàn. Người xem cần bình luận hoặc tặng quà.');
+  });
   document.getElementById('change-avatar').addEventListener('click', () => {
     const palette = club?.changeAvatar(); if (palette) announce('Phong cách ' + palette);
   });
-  document.getElementById('camera-reset').addEventListener('click', () => club?.resetCamera());
-  document.getElementById('camera-orbit').addEventListener('click', (event) => event.currentTarget.setAttribute('aria-pressed', String(club?.toggleOrbit() || false)));
+  document.getElementById('camera-reset').addEventListener('click', () => { club?.setCameraMode('overview', true); void saveSettings({ cameraMode: 'overview' }); });
+  document.getElementById('camera-orbit').addEventListener('click', () => { void saveSettings({ cameraMode: club?.getSnapshot().selectedCameraMode === 'orbit' ? 'overview' : 'orbit' }); });
+  document.getElementById('camera-mixed')?.addEventListener('click', () => { void saveSettings({ cameraMode: 'mixed' }); });
   document.getElementById('lights-toggle').addEventListener('click', (event) => event.currentTarget.setAttribute('aria-pressed', String(club?.toggleLights() || false)));
+  laserToggle?.addEventListener('click', () => { void saveSettings({ laserEnabled: savedSettings.laserEnabled !== true }); });
   document.getElementById('fullscreen').addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else stage.requestFullscreen?.().catch(() => announce('Không mở được chế độ toàn màn hình.'));

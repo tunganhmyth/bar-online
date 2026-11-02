@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 
@@ -23,6 +24,7 @@ import java.util.concurrent.*;
 public class TikTokLiveService {
     private static final Logger log = LoggerFactory.getLogger(TikTokLiveService.class);
     private final ObjectMapper mapper;
+    private final StageSettingsService stageSettings;
     private final String node;
     private final Path script;
     private final Set<SseEmitter> clients = ConcurrentHashMap.newKeySet();
@@ -36,10 +38,11 @@ public class TikTokLiveService {
     private Process worker;
     private BufferedWriter commands;
 
-    public TikTokLiveService(ObjectMapper mapper,
+    public TikTokLiveService(ObjectMapper mapper, StageSettingsService stageSettings,
                             @Value("${tiktok.node:node}") String node,
                             @Value("${tiktok.script:bridge/worker.mjs}") String script) {
         this.mapper = mapper;
+        this.stageSettings = stageSettings;
         this.node = node;
         this.script = Paths.get(script).toAbsolutePath();
         state = idleState(null);
@@ -51,15 +54,24 @@ public class TikTokLiveService {
 
     public JsonNode getState() { return state.deepCopy(); }
 
-    public SseEmitter subscribe() {
+    public synchronized SseEmitter subscribe() {
         SseEmitter client = new SseEmitter(0L);
         clients.add(client);
         client.onCompletion(() -> clients.remove(client));
         client.onTimeout(() -> removeClient(client));
         client.onError(error -> clients.remove(client));
-        try { client.send(SseEmitter.event().data(envelope("state", state))); }
+        try {
+            client.send(SseEmitter.event().data(envelope("state", state)));
+            client.send(SseEmitter.event().data(envelope("stage-settings", stageSettings.get())));
+        }
         catch (IOException | IllegalStateException error) { removeClient(client); }
         return client;
+    }
+
+    public synchronized JsonNode updateStageSettings(Map<String, Object> patch) throws IOException {
+        JsonNode saved = stageSettings.update(patch);
+        broadcast(envelope("stage-settings", saved));
+        return saved;
     }
 
     public synchronized void connect(String username) throws IOException {

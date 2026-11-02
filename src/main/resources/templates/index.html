@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MythMaker · TikTok LIVE</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/css/live.css?v=3d1">
-  <script src="/js/club-scene.js?v=3d2" defer></script>
-  <script src="/js/live.js?v=3d1" defer></script>
+  <link rel="stylesheet" href="/css/live.css?v=gift2">
+  <link rel="stylesheet" href="/css/stage-controls.css?v=hostcam1">
+  <script src="/js/club-scene.js?v=laser5" defer></script>
+  <script src="/js/live.js?v=laser5" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -30,11 +31,28 @@
     </section>
     <section class="control-section">
       <div class="section-title"><span>02</span><h2>Sân khấu của bạn</h2></div>
+      <form id="host-form" class="host-form">
+        <label for="host-name">Tên nhân vật chủ sàn</label>
+        <div class="host-input-row"><div class="input-wrap"><span>♛</span><input id="host-name" name="hostName" value="Chủ sàn" placeholder="Nhập tên chủ sàn" maxlength="40" autocomplete="off" required disabled></div><button id="save-host" type="submit" disabled>Áp dụng</button></div>
+        <small class="host-hint">Chủ sàn luôn có mặt, kể cả khi chưa mở LIVE.</small>
+      </form>
+      <div class="camera-picker">
+        <label for="camera-mode">Chế độ góc quay</label>
+        <select id="camera-mode" disabled>
+          <option value="overview">Toàn sàn</option><option value="front">Chính diện</option>
+          <option value="left">Chéo trái</option><option value="right">Chéo phải</option>
+          <option value="overhead">Từ trên cao</option><option value="orbit">Xoay chậm</option>
+          <option value="closeup">Cận cảnh nhân vật</option><option value="mixed">Hỗn hợp tự động</option>
+        </select>
+        <small id="stage-settings-status" class="settings-status" role="status">Đang tải cài đặt…</small>
+      </div>
       <div class="stage-controls">
         <button id="change-avatar" type="button"><span>♧</span><span>Đổi trang phục<small>8 phong cách nhân vật</small></span><i>↗</i></button>
         <button id="camera-reset" type="button"><span>◎</span><span>Góc máy toàn sàn<small>Trở về góc nhìn ban đầu</small></span><i>↗</i></button>
         <button id="camera-orbit" type="button" aria-pressed="false"><span>◌</span><span>Camera xoay chậm<small>Tự động chuyển góc nhìn</small></span><i>↗</i></button>
+        <button id="camera-mixed" type="button" aria-pressed="false"><span>⤨</span><span>Góc quay hỗn hợp<small>Tự đổi góc mỗi 5 giây · Không quay từ trên đầu</small></span><i>↗</i></button>
         <button id="lights-toggle" type="button" aria-pressed="true"><span>✧</span><span>Đèn sân khấu<small>Neon &amp; đèn quét chuyển động</small></span><i class="switch"></i></button>
+        <button id="laser-toggle" type="button" aria-pressed="false" disabled><span>⌁</span><span>Đèn laser<small>Tia laser đa sắc quét hình quạt</small></span><i class="switch"></i></button>
       </div>
     </section>
     <section class="control-section music-section">
@@ -43,7 +61,7 @@
       <audio id="music" controls autoplay loop preload="auto" aria-label="Nhạc nền Vinahouse"></audio>
     </section>
     <div class="preview-actions"><button id="preview" type="button">↻ Xem thử sân khấu</button><button id="test-gift" type="button">♢ Thử camera quà</button></div>
-    <p class="helper-note">Người xem vào LIVE sẽ có nhân vật riêng.<br>Tặng quà để trở thành tâm điểm.<br>Bình luận <b>“đổi đồ”</b> để đổi phong cách.</p>
+    <p class="helper-note">Bình luận hoặc tặng quà để lên sàn.<br>Nhân vật tự rời sàn sau 10 phút không tương tác.<br>Bình luận <b>“đổi đồ”</b> để đổi phong cách.</p>
     <a class="asset-credit" href="/models/ATTRIBUTION.md" target="_blank" rel="noopener">3D character credits ↗</a>
   </aside>
   <section class="viewport-panel" aria-label="Xem trước sân khấu">
@@ -52,7 +70,7 @@
       <div id="wutai" class="stage" aria-label="Sàn nhảy 3D TikTok Live">
         <canvas id="club-canvas" aria-label="Sân khấu 3D với nhân vật đang nhảy"></canvas>
         <div id="character-labels"></div>
-        <div class="stage-hud"><div class="stage-wordmark">MYTH<span>MAKER</span><small>AFTER DARK</small></div><span id="stage-mode" class="mode-pill">XEM THỬ</span></div>
+        <div class="stage-hud"><div class="stage-wordmark">MYTH<span>MAKER</span><small>AFTER DARK</small></div><span id="stage-mode" class="mode-pill">CHỜ LIVE</span></div>
         <div class="stage-top-line"></div>
         <div id="scene-loader" class="scene-loader" role="status"><span class="loader-ring"></span><strong>Đang mở cửa sân khấu</strong><small>Đang tải nhân vật &amp; không gian 3D…</small></div>
         <div id="gift-feature" class="gift-feature" hidden><span class="gift-symbol">♢</span><div><small id="gift-caption">TÂM ĐIỂM ĐÊM NAY</small><strong id="gift-user"></strong><p id="gift-description"></p></div><span class="gift-camera-tag">CAM 01</span><span class="gift-progress"></span></div>
@@ -60,7 +78,7 @@
         <div class="stage-footer"><span><i class="tiny-dot"></i> <b id="dancer-count">0</b> TRÊN SÀN</span><span id="camera-status">GÓC MÁY TOÀN SÀN</span></div>
       </div>
     </div>
-    <div class="viewport-caption"><span>✧ Sàn neon · Nhân vật 3D · Camera tương tác</span><span>Kéo để xoay góc máy</span></div>
+    <div class="viewport-caption"><span>✧ Sàn neon · Nhân vật 3D · Camera tương tác</span><span id="camera-help">Kéo để xoay góc máy</span></div>
   </section>
 </main>
 <button id="enable-music" type="button" aria-label="Bật nhạc" hidden>♫ Bật nhạc</button>
