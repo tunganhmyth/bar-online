@@ -26,6 +26,9 @@ class StageSettingsTests {
         patch.put("hostName", "  Linh ⚡  ");
         patch.put("cameraMode", "mixed");
         patch.put("laserEnabled", true);
+        patch.put("hostCharacter", "luna");
+        patch.put("stageName", "  Lâu Đài Ánh Trăng  ");
+        patch.put("musicTrack", "ket-thuc-va-chia-tay");
         service.update(patch);
         assertEquals("Linh ⚡", service.get().path("hostName").asText());
         for (String mode : new String[]{"overview", "front", "left", "right", "overhead", "orbit", "closeup", "mixed"}) {
@@ -34,7 +37,14 @@ class StageSettingsTests {
         }
         StageSettingsService restarted = new StageSettingsService(new ObjectMapper(), file.toString());
         assertEquals(service.get(), restarted.get());
+        assertEquals("Lâu Đài Ánh Trăng", restarted.get().path("stageName").asText());
         assertTrue(restarted.get().path("laserEnabled").asBoolean());
+        assertEquals("luna", restarted.get().path("hostCharacter").asText());
+        assertEquals("ket-thuc-va-chia-tay", restarted.get().path("musicTrack").asText());
+        for (String character : new String[]{"sakura", "yuki", "akira", "luna", "hikari"}) {
+            restarted.update(Collections.singletonMap("hostCharacter", character));
+            assertEquals(character, restarted.get().path("hostCharacter").asText());
+        }
         long revision = restarted.get().path("revision").asLong();
         assertEquals(revision, restarted.update(Collections.singletonMap("cameraMode", "mixed")).path("revision").asLong());
     }
@@ -47,8 +57,25 @@ class StageSettingsTests {
         assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("cameraMode", "invalid")));
         assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("hostName", 123)));
         assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("laserEnabled", "true")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("hostCharacter", "unknown")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("stageName", "  ")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("stageName", 123)));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("stageName", String.join("", Collections.nCopies(33, "a")))));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("musicTrack", "../../unknown.mp3")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(Collections.singletonMap("musicTrack", 123)));
+        assertEquals("forever-one-love", service.get().path("musicTrack").asText());
         assertEquals("MythMaker", service.get().path("hostName").asText());
         assertEquals("overview", service.get().path("cameraMode").asText());
+    }
+
+    @Test
+    void olderSettingsFilesKeepTheirValuesAndDefaultStageName() throws Exception {
+        Path file = temporary.resolve("old-settings.json");
+        new ObjectMapper().writeValue(file.toFile(), Collections.singletonMap("hostName", "Old host"));
+        StageSettingsService service = new StageSettingsService(new ObjectMapper(), file.toString());
+        assertEquals("MYTHMAKER", service.get().path("stageName").asText());
+        assertEquals("Old host", service.get().path("hostName").asText());
+        assertEquals("forever-one-love", service.get().path("musicTrack").asText());
     }
 
     @Test

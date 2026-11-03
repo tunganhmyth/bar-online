@@ -6,6 +6,13 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   if (command.action === 'connect') {
     send('state', { connected: true, connecting: false, username: command.username.replace(/^@/, ''), roomId: 'fixture-room', viewerCount: 12, lastError: null });
     send('chat', { uniqueId: 'viewer', nickname: 'Người xem', comment: 'Xin chào TikTok' });
+    if (command.username.replace(/^@/, '').startsWith('leaderboard_test')) {
+      send('chat', { uniqueId: 'rank-b', nickname: 'Lan Quế Phường', comment: '!hikari' });
+      send('gift', { uniqueId: 'rank-a', nickname: 'Royal Star', giftName: 'Sao', count: 1, diamonds: 100 });
+      send('gift', { uniqueId: 'rank-b', nickname: 'Lan Quế Phường', giftName: 'Hoa hồng', count: 5, diamonds: 50 });
+      send('gift', { uniqueId: 'rank-c', nickname: 'Luna VIP', giftName: 'Trái tim', count: 2, diamonds: 20 });
+      setTimeout(() => send('gift', { uniqueId: 'rank-b', nickname: 'Lan Quế Phường', giftName: 'Hoa hồng', count: 6, diamonds: 60 }), 3000);
+    }
     if (command.username.replace(/^@/, '') === 'scene_test') {
       send('member', { uniqueId: 'second-viewer', nickname: 'Khách thứ hai' });
       setTimeout(() => send('gift', { uniqueId: 'viewer', nickname: 'Người xem', giftName: 'Hoa hồng', count: 5, diamonds: 5 }), 800);

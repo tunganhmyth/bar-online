@@ -10,9 +10,18 @@
     "build": "node scripts/build-frontend.mjs",
     "test:presence": "npm run build && node tests/stage-presence.browser.mjs",
     "test:camera": "npm run build && node tests/stage-camera.browser.mjs",
+    "test:top-camera": "node tests/stage-top-camera.browser.mjs",
+    "test:characters": "npm run build && node tests/stage-characters.browser.mjs",
+    "test:wings": "node tests/stage-wings.browser.mjs",
+    "test:motions": "node --test tests/dance-motions.test.mjs tests/dance-foot-ik.test.mjs",
+    "test:rig": "node tests/choreography-rig.browser.mjs",
+    "test:stage-name": "npm run build && node tests/stage-name.browser.mjs",
+    "test:top-gifters": "npm run build && node tests/stage-top-gifters.browser.mjs",
+    "test:music": "node tests/stage-music.browser.mjs",
     "test": "node --test bridge/live-bridge.test.mjs"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
     "three": "0.187.0",
     "tiktok-live-connector": "2.5.0"
   },

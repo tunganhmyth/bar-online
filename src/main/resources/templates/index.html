@@ -6,9 +6,9 @@
   <title>MythMaker · TikTok LIVE</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/css/live.css?v=gift2">
-  <link rel="stylesheet" href="/css/stage-controls.css?v=hostcam1">
-  <script src="/js/club-scene.js?v=laser5" defer></script>
-  <script src="/js/live.js?v=laser5" defer></script>
+  <link rel="stylesheet" href="/css/stage-controls.css?v=fx2">
+  <script src="/js/club-scene.js?v=feathers1" defer></script>
+  <script src="/js/live.js?v=couture1" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -31,11 +31,28 @@
     </section>
     <section class="control-section">
       <div class="section-title"><span>02</span><h2>Sân khấu của bạn</h2></div>
+      <form id="stage-name-form" class="host-form">
+        <label for="stage-name">Tên sàn / bảng hiệu</label>
+        <div class="host-input-row"><div class="input-wrap"><span>✦</span><input id="stage-name" name="stageName" value="MYTHMAKER" placeholder="Nhập tên sàn của bạn" maxlength="32" autocomplete="off" required disabled></div><button id="save-stage-name" type="submit" disabled>Áp dụng</button></div>
+        <small class="host-hint">Đổi chữ ở góc trên và bảng LED phía sau. Tối đa 32 ký tự.</small>
+      </form>
       <form id="host-form" class="host-form">
         <label for="host-name">Tên nhân vật chủ sàn</label>
         <div class="host-input-row"><div class="input-wrap"><span>♛</span><input id="host-name" name="hostName" value="Chủ sàn" placeholder="Nhập tên chủ sàn" maxlength="40" autocomplete="off" required disabled></div><button id="save-host" type="submit" disabled>Áp dụng</button></div>
         <small class="host-hint">Chủ sàn luôn có mặt, kể cả khi chưa mở LIVE.</small>
       </form>
+      <div class="character-picker">
+        <label for="host-character">Nhân vật chủ sàn</label>
+        <select id="host-character" disabled>
+          <option value="sakura">Sakura · Nữ · Dân chơi phố đêm</option>
+          <option value="yuki">Yuki · Nữ · Công chúa băng</option>
+          <option value="akira">Akira · Nam · Dân chơi cyber</option>
+          <option value="luna">Luna · Nữ · Quý tộc ánh trăng</option>
+          <option value="hikari">Hikari · Nam · Hoàng tử bình minh</option>
+        </select>
+        <p id="character-description" class="character-description">Sensual Club · 128 nhịp · Vũ điệu hoa anh đào</p>
+        <details class="character-roster"><summary>Khám phá 5 nhân vật <span>✧</span></summary><div id="character-roster"></div></details>
+      </div>
       <div class="camera-picker">
         <label for="camera-mode">Chế độ góc quay</label>
         <select id="camera-mode" disabled>
@@ -47,18 +64,28 @@
         <small id="stage-settings-status" class="settings-status" role="status">Đang tải cài đặt…</small>
       </div>
       <div class="stage-controls">
-        <button id="change-avatar" type="button"><span>♧</span><span>Đổi trang phục<small>8 phong cách nhân vật</small></span><i>↗</i></button>
+        <button id="change-avatar" type="button"><span>♧</span><span>Đổi nhân vật<small>5 nhân vật anime · 5 kỹ năng riêng</small></span><i>↗</i></button>
         <button id="camera-reset" type="button"><span>◎</span><span>Góc máy toàn sàn<small>Trở về góc nhìn ban đầu</small></span><i>↗</i></button>
         <button id="camera-orbit" type="button" aria-pressed="false"><span>◌</span><span>Camera xoay chậm<small>Tự động chuyển góc nhìn</small></span><i>↗</i></button>
-        <button id="camera-mixed" type="button" aria-pressed="false"><span>⤨</span><span>Góc quay hỗn hợp<small>Tự đổi góc mỗi 5 giây · Không quay từ trên đầu</small></span><i>↗</i></button>
+        <button id="camera-mixed" type="button" aria-pressed="false"><span>⤨</span><span>Góc quay hỗn hợp<small>Mỗi góc 5 giây · Xen cận cảnh Top quà</small></span><i>↗</i></button>
         <button id="lights-toggle" type="button" aria-pressed="true"><span>✧</span><span>Đèn sân khấu<small>Neon &amp; đèn quét chuyển động</small></span><i class="switch"></i></button>
         <button id="laser-toggle" type="button" aria-pressed="false" disabled><span>⌁</span><span>Đèn laser<small>Tia laser đa sắc quét hình quạt</small></span><i class="switch"></i></button>
       </div>
     </section>
     <section class="control-section music-section">
-      <div class="section-title"><span>03</span><h2>Đang phát</h2><span class="music-bars"><i></i><i></i><i></i><i></i></span></div>
-      <div class="track"><span class="track-art">♫</span><div><strong>NONSTOP VINAHOUSE</strong><small>Vào phòng bay phải mở bài này</small><span>LIVE MIX · 2025</span></div></div>
-      <audio id="music" controls autoplay loop preload="auto" aria-label="Nhạc nền Vinahouse"></audio>
+      <div class="section-title"><span>03</span><h2>Top quà tặng</h2><span class="tag">TOP 3</span></div>
+      <div id="top-gifters-list" class="top-gifters-list" aria-live="polite"><p class="top-empty">Chưa có quà trong phiên kết nối này.</p></div>
+      <small id="top-gifters-note" class="host-hint">Cơ Trưởng · Cơ Phó · Tiếp viên · Tự cập nhật bàn DJ</small>
+    </section>
+    <section class="control-section music-section">
+      <div class="section-title"><span>04</span><h2>Đang phát</h2><span class="music-bars"><i></i><i></i><i></i><i></i></span></div>
+      <div class="music-picker">
+        <label for="music-track">Chọn bài nhạc</label>
+        <select id="music-track" disabled></select>
+        <small id="music-status" class="host-hint" role="status">Đang tải danh sách nhạc…</small>
+      </div>
+      <div class="track"><span class="track-art">♫</span><div><strong>FOREVER ONE LOVE #2</strong><small>DARKD x DAVID SEA</small><span>LIVE MIX · M4A</span></div></div>
+      <audio id="music" controls autoplay loop preload="auto" aria-label="FOREVER ONE LOVE #2 · DARKD x DAVID SEA"></audio>
     </section>
     <div class="preview-actions"><button id="preview" type="button">↻ Xem thử sân khấu</button><button id="test-gift" type="button">♢ Thử camera quà</button></div>
     <p class="helper-note">Bình luận hoặc tặng quà để lên sàn.<br>Nhân vật tự rời sàn sau 10 phút không tương tác.<br>Bình luận <b>“đổi đồ”</b> để đổi phong cách.</p>
@@ -69,11 +96,11 @@
     <div class="stage-surround">
       <div id="wutai" class="stage" aria-label="Sàn nhảy 3D TikTok Live">
         <canvas id="club-canvas" aria-label="Sân khấu 3D với nhân vật đang nhảy"></canvas>
-        <div id="character-labels"></div>
-        <div class="stage-hud"><div class="stage-wordmark">MYTH<span>MAKER</span><small>AFTER DARK</small></div><span id="stage-mode" class="mode-pill">CHỜ LIVE</span></div>
+        <div id="character-labels"></div><div id="top-gifter-labels"></div>
+        <div class="stage-hud"><div class="stage-wordmark"><strong id="stage-name-label" class="stage-name-label">MYTHMAKER</strong><small>AFTER DARK</small></div><span id="stage-mode" class="mode-pill">CHỜ LIVE</span></div>
         <div class="stage-top-line"></div>
         <div id="scene-loader" class="scene-loader" role="status"><span class="loader-ring"></span><strong>Đang mở cửa sân khấu</strong><small>Đang tải nhân vật &amp; không gian 3D…</small></div>
-        <div id="gift-feature" class="gift-feature" hidden><span class="gift-symbol">♢</span><div><small id="gift-caption">TÂM ĐIỂM ĐÊM NAY</small><strong id="gift-user"></strong><p id="gift-description"></p></div><span class="gift-camera-tag">CAM 01</span><span class="gift-progress"></span></div>
+        <div id="gift-feature" class="gift-feature" hidden><span class="gift-symbol">♢</span><div><small id="gift-caption">TÂM ĐIỂM ĐÊM NAY</small><strong id="gift-user"></strong><p id="gift-description"></p><span id="gift-skill" class="gift-skill"></span></div><span class="gift-camera-tag">CAM 01</span><span class="gift-progress"></span></div>
         <div id="activity" class="activity" aria-live="polite"></div>
         <div class="stage-footer"><span><i class="tiny-dot"></i> <b id="dancer-count">0</b> TRÊN SÀN</span><span id="camera-status">GÓC MÁY TOÀN SÀN</span></div>
       </div>

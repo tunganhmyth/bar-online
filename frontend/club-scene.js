@@ -1,28 +1,19 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import { CHARACTERS, loadAnimeTemplate, createAnimeActor, createSignatureEffect } from './anime-characters.js';
+import { createTopGifterStage, TOP_ROLES } from './top-gifter-stage.js';
+import { createFocusAura } from './character-effects.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-const PALETTES = [
-  { name: 'Neon Rose', hair: '#e7baca', top: '#ff379a', bottom: '#131321', shoes: '#f3f4ff' },
-  { name: 'Midnight', hair: '#121522', top: '#ecf6ff', bottom: '#223249', shoes: '#e1ebf9' },
-  { name: 'Electric Blue', hair: '#74c8e8', top: '#57deee', bottom: '#141b29', shoes: '#eefcff' },
-  { name: 'Violet', hair: '#a98ee4', top: '#9970ed', bottom: '#21172d', shoes: '#eee4ff' },
-  { name: 'Blonde', hair: '#e3c17a', top: '#f4f0e7', bottom: '#3d4b72', shoes: '#f9fafc' },
-  { name: 'Cherry', hair: '#5c142f', top: '#c51e52', bottom: '#161421', shoes: '#222035' },
-  { name: 'Silver', hair: '#d8e2ec', top: '#202334', bottom: '#e0e4ec', shoes: '#252438' },
-  { name: 'Mint', hair: '#293f36', top: '#78e3b4', bottom: '#222b3b', shoes: '#e8f9f0' }
-];
 const SLOT_POSITIONS = [
   [-2.5, 2.5], [2.5, 2.5], [0, 0], [-5, 0], [5, 0],
   [-2.5, -2.5], [2.5, -2.5], [-5, -5], [0, -5], [5, -5],
   [0, 5], [-5, 5], [5, 5], [-7.5, 2.5], [7.5, 2.5],
-  [-7.5, -2.5], [7.5, -2.5], [-2.5, -7.5], [2.5, -7.5],
-  [-7.5, 5], [7.5, 5], [-5, -7.5], [5, -7.5], [0, 7.5],
+  [-7.5, -2.5], [7.5, -2.5], [-7.5, 7.5], [7.5, 7.5],
+  [-7.5, 5], [7.5, 5], [-7.5, 10], [7.5, 10], [0, 7.5],
   [-7.5, -5], [7.5, -5], [-5, 7.5], [5, 7.5], [-2.5, 7.5], [2.5, 7.5]
 ];
 const DEMO_USERS = ['Mina', 'Luna', 'Kira', 'Yuna', 'Sora', 'Ruby', 'Hana', 'Yuki'];
@@ -35,6 +26,7 @@ const CAMERA_LABELS = {
   overhead: 'Từ trên cao', orbit: 'Xoay chậm', closeup: 'Cận cảnh nhân vật', mixed: 'Hỗn hợp tự động'
 };
 const MIXED_SHOTS = ['overview', 'left', 'front', 'right', 'closeup', 'orbit'];
+const MIXED_TOP_SHOTS = ['overview', 'left', 'front', 'top', 'right', 'closeup', 'orbit', 'top'];
 const SHOT_SECONDS = 5;
 
 function textureCanvas(width, height, draw) {
@@ -79,6 +71,7 @@ window.createClubScene = function createClubScene(container) {
   composer.addPass(new OutputPass());
 
   const actors = new Map();
+  const characterSelections = new Map();
   const spotBeams = [];
   const ledBars = [];
   const floorSegments = [];
@@ -90,9 +83,6 @@ window.createClubScene = function createClubScene(container) {
   const positions = new Set();
   const clock = new THREE.Clock();
   let model = null;
-  let danceClip = null;
-  let modelScale = 1;
-  let modelOffset = 0;
   let elapsed = 0;
   let activeGift = null;
   let width = 1, height = 1;
@@ -100,12 +90,18 @@ window.createClubScene = function createClubScene(container) {
   let lightsOn = true;
   let laserEnabled = false;
   let hostName = 'Chủ sàn';
+  let stageName = 'MYTHMAKER';
+  let hostCharacter = 'sakura';
+  let signatureEffect = null;
+  let portraitFocus = null;
+  let rankingEpoch = '', rankingSession = null, rankingRevision = -1, lastRankings = null;
   let cameraMode = 'overview';
   let cameraShot = 'overview';
   let directorEpoch = 0;
   let shotEpoch = 0;
   let shotKey = '';
   let closeupTarget = HOST_ID;
+  let topCameraRank = null, topCameraCursor = 0, topCameraUser = '';
   let cameraTransition = null;
   let disposed = false;
   let renderTime = 0;
@@ -114,14 +110,14 @@ window.createClubScene = function createClubScene(container) {
   let fpsStart = 0;
   const onEvent = (type, detail) => container.dispatchEvent(new CustomEvent(type, { detail }));
 
-  scene.add(new THREE.HemisphereLight('#cfd7ff', '#332447', 1.9));
-  const key = new THREE.DirectionalLight('#ffecd9', 2.8);
+  scene.add(new THREE.HemisphereLight('#e4e9ff', '#4a365a', 0.85));
+  const key = new THREE.DirectionalLight('#fff1e8', 1.15);
   key.position.set(3, 7, 8);
   scene.add(key);
-  const rim = new THREE.DirectionalLight('#8cdfff', 2.5);
+  const rim = new THREE.DirectionalLight('#8cdfff', 0.8);
   rim.position.set(-5, 4, -5);
   scene.add(rim);
-  const fill = new THREE.PointLight('#ff5bce', 32, 18, 2);
+  const fill = new THREE.PointLight('#ff5bce', 12, 18, 2);
   fill.position.set(0, 4, -3);
   scene.add(fill);
 
@@ -215,19 +211,50 @@ window.createClubScene = function createClubScene(container) {
   }
   neon(22, 0.025, 0.04, '#4bcfd8', 0, 2.4, -9.6, 1.6);
   neon(22, 0.023, 0.04, '#d42caa', 0, 2.55, -9.6, 1.6);
-  box(8, 2.7, 0.2, '#100b1c', 0, 3.8, -9.65);
-  const logoTexture = textureCanvas(1024, 320, (ctx, w, h) => {
+  box(8, 2.7, 0.2, '#100b1c', 0, 7.4, -9.65);
+  function drawStageLogo(ctx, w, h) {
     ctx.fillStyle = '#0f0b19'; ctx.fillRect(0, 0, w, h);
     const gradient = ctx.createLinearGradient(0, 0, w, 0);
     gradient.addColorStop(0, '#80ffff'); gradient.addColorStop(0.5, '#ffffff'); gradient.addColorStop(1, '#ff68d4');
     ctx.textAlign = 'center'; ctx.fillStyle = gradient;
-    ctx.font = '900 104px Arial'; ctx.fillText('MYTHMAKER', w / 2, 160);
+    ctx.font = '900 104px Arial';
+    const textWidth = ctx.measureText(stageName).width;
+    ctx.font = `900 ${Math.min(104, 104 * (w - 96) / Math.max(1, textWidth))}px Arial`;
+    ctx.fillText(stageName, w / 2, 160);
     ctx.fillStyle = '#b4a1cf'; ctx.font = '26px Arial'; ctx.fillText('THE NIGHT IS YOURS', w / 2, 225);
     ctx.fillStyle = '#493252'; ctx.fillRect(180, 268, 664, 2);
-  });
+  }
+  const logoTexture = textureCanvas(1024, 320, drawStageLogo);
   const logo = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 2.35), new THREE.MeshBasicMaterial({ map: logoTexture }));
-  logo.position.set(0, 3.85, -9.5);
+  logo.position.set(0, 7.45, -9.5);
   scene.add(logo);
+  function fitStageName() {
+    const label = container.querySelector('#stage-name-label');
+    if (!label) return;
+    const style = getComputedStyle(label.parentElement);
+    const base = parseFloat(style.fontSize);
+    const available = Math.max(60, label.parentElement.clientWidth - 4);
+    const tracking = stageName.length > 20 ? 0.5 : 1.5;
+    const ctx = logoTexture.image.getContext('2d');
+    ctx.save(); ctx.font = `700 ${base}px ${style.fontFamily}`;
+    const measured = ctx.measureText(stageName).width;
+    label.style.letterSpacing = `${tracking}px`;
+    label.style.fontSize = `${Math.min(base, Math.max(5, base * (available - (stageName.length - 1) * tracking) / Math.max(1, measured)))}px`;
+    ctx.restore();
+  }
+  function setStageName(value) {
+    const name = String(value || '').trim().replace(/[\r\n\t]+/g, ' ').slice(0, 32) || 'MYTHMAKER';
+    if (stageName !== name) {
+      stageName = name;
+      const canvas = logoTexture.image;
+      drawStageLogo(canvas.getContext('2d'), canvas.width, canvas.height);
+      logoTexture.needsUpdate = true;
+    }
+    const label = container.querySelector('#stage-name-label');
+    if (label) label.textContent = stageName;
+    fitStageName();
+  }
+  document.fonts.ready.then(() => { if (!disposed) fitStageName(); });
   for (const x of [-8.8, 8.8]) {
     for (let level = 0; level < 2; level++) {
       box(1.4, 1.65, 0.9, '#11131c', x, 0.85 + level * 1.7, -8.3);
@@ -267,7 +294,7 @@ window.createClubScene = function createClubScene(container) {
   const laserUp = new THREE.Vector3(0, 1, 0);
   const laserDirection = new THREE.Vector3();
   const laserEnd = new THREE.Vector3();
-  const lasers = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.014, 0.014, 1, 6),
+  const lasers = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.014 / 3, 0.014 / 3, 1, 6),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }), laserCount);
   const laserOrigins = [new THREE.Vector3(-7.5, 5.4, -8.8), new THREE.Vector3(7.5, 5.4, -8.8)];
   for (let i = 0; i < laserCount; i++) {
@@ -279,10 +306,12 @@ window.createClubScene = function createClubScene(container) {
   scene.add(lasers);
   const focusLight = new THREE.PointLight('#ffce72', 0, 7, 2);
   scene.add(focusLight);
-  const giftRing = new THREE.Mesh(new THREE.RingGeometry(0.83, 0.86, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffc861').multiplyScalar(2.5), side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+  const giftRing = new THREE.Mesh(new THREE.RingGeometry(0.79, 0.8, 64), new THREE.MeshBasicMaterial({ color: '#ffc861', side: THREE.DoubleSide, transparent: true, depthWrite: false, opacity: 0.35 }));
   giftRing.rotation.x = -Math.PI / 2;
   giftRing.visible = false;
   scene.add(giftRing);
+  const podiumLabels = container.querySelector('#top-gifter-labels') || container.appendChild(Object.assign(document.createElement('div'), { id: 'top-gifter-labels' }));
+  const topStage = createTopGifterStage(scene, podiumLabels);
 
   function home() {
     const portrait = width / height < 0.9;
@@ -304,6 +333,7 @@ window.createClubScene = function createClubScene(container) {
     composer.setSize(width, height);
     camera.aspect = width / height;
     home();
+    fitStageName();
   });
   resize.observe(container);
 
@@ -323,46 +353,38 @@ window.createClubScene = function createClubScene(container) {
     return { label, message };
   }
 
-  function applyPalette(actor) {
-    const colors = PALETTES[actor.variant % PALETTES.length];
-    for (const material of actor.materials) {
-      const name = material.name.toLowerCase();
-      if (name === 'hair') material.color.set(colors.hair);
-      else if (name === 't-shirt') material.color.set(colors.top);
-      else if (name === 'short') material.color.set(colors.bottom);
-      else if (name === 'white') material.color.set(colors.shoes);
-      else if (name === 'black') material.color.set('#131623');
-      else if (name === 'skin') material.color.set(['#eac1a8', '#e6b79d', '#c28d6f'][actor.variant % 3]);
-      material.roughness = name === 'hair' ? 0.65 : 0.8;
-      material.metalness = 0;
-    }
-    actor.label.style.setProperty('--avatar-accent', colors.top);
-    actor.palette = colors.name;
+  function applyCharacterLabel(actor) {
+    const config = CHARACTERS[actor.variant];
+    actor.label.style.setProperty('--avatar-accent', config.accent);
+    actor.label.dataset.character = config.id;
+    actor.palette = config.name;
   }
 
   function attachModel(actor) {
     if (!model || actor.model) return;
-    actor.model = cloneSkeleton(model);
-    actor.materials = [];
-    actor.model.traverse((child) => {
-      if (!child.isMesh) return;
-      if (Array.isArray(child.material)) {
-        child.material = child.material.map((material) => material.clone());
-        actor.materials.push(...child.material);
-      } else { child.material = child.material.clone(); actor.materials.push(child.material); }
-      child.frustumCulled = false;
-    });
-    actor.model.scale.setScalar(modelScale);
-    actor.model.position.y = modelOffset;
+    actor.avatar = createAnimeActor(model, actor.variant, actor.seed, elapsed);
+    actor.model = actor.avatar.model;
+    actor.materials = actor.avatar.materials;
     actor.group.add(actor.model);
-    actor.head = actor.model.getObjectByName('mixamorigHead');
-    actor.mixer = new THREE.AnimationMixer(actor.model);
-    const action = actor.mixer.clipAction(danceClip);
-    action.play(); action.time = actor.seed % Math.max(1, danceClip.duration);
-    action.timeScale = 0.88 + actor.variant * 0.035;
-    actor.action = action;
+    actor.mixer = actor.avatar.mixer;
     mixers.add(actor.mixer);
-    applyPalette(actor);
+    applyCharacterLabel(actor);
+  }
+
+  function selectCharacter(id, characterId, preserveGift = false) {
+    const actor = actors.get(id);
+    const index = CHARACTERS.findIndex((config) => config.id === characterId);
+    if (!actor || index < 0) return null;
+    if (!actor.isHost) characterSelections.set(id, index);
+    if (actor.variant === index) return CHARACTERS[index];
+    if (activeGift?.id === actor.id) {
+      if (!preserveGift) resetCamera();
+      else { signatureEffect?.dispose(); signatureEffect = null; }
+    }
+    if (actor.avatar) { mixers.delete(actor.mixer); actor.avatar.dispose(); actor.model.removeFromParent(); }
+    actor.avatar = null; actor.model = null; actor.variant = index;
+    attachModel(actor); applyCharacterLabel(actor);
+    return CHARACTERS[index];
   }
 
   function addParticipant(user, isDemo = false) {
@@ -385,7 +407,7 @@ window.createClubScene = function createClubScene(container) {
     group.rotation.y = -0.12 + (hash(id) % 5) * 0.055;
     scene.add(group);
     const label = actorLabel({ ...user, uniqueId: id }, isDemo, isHost);
-    const actor = { id, user, isDemo, isHost, slot, group, ...label, variant: hash(id) % PALETTES.length, seed: hash(id), materials: [], reactUntil: 0, messageUntil: 0, lastActiveAt: Date.now() };
+    const actor = { id, user, isDemo, isHost, slot, group, ...label, variant: isHost ? CHARACTERS.findIndex((config) => config.id === hostCharacter) : characterSelections.get(id) ?? hash(id) % CHARACTERS.length, seed: hash(id), materials: [], reactUntil: 0, messageUntil: 0, lastActiveAt: Date.now() };
     actors.set(id, actor);
     attachModel(actor);
     container.dataset.actorCount = actors.size;
@@ -401,10 +423,8 @@ window.createClubScene = function createClubScene(container) {
       if (focusQueue[i].id === id) focusQueue.splice(i, 1);
     }
     if (activeGift?.id === id) clearActiveGift();
-    actor.mixer?.stopAllAction();
-    if (actor.mixer) { actor.mixer.uncacheRoot(actor.model); mixers.delete(actor.mixer); }
-    actor.model?.traverse((child) => { if (child.isSkinnedMesh) child.skeleton.dispose(); });
-    actor.materials.forEach((material) => material.dispose());
+    if (actor.mixer) mixers.delete(actor.mixer);
+    actor.avatar?.dispose();
     actor.label.remove();
     scene.remove(actor.group);
     positions.delete(actor.slot);
@@ -433,9 +453,30 @@ window.createClubScene = function createClubScene(container) {
     container.dataset.preview = String(enabled);
     if (enabled) DEMO_USERS.forEach((nickname, i) => {
       const actor = addParticipant({ uniqueId: 'demo:' + i, nickname }, true);
-      actor.variant = i;
-      if (actor.model) applyPalette(actor);
+      selectCharacter(actor.id, CHARACTERS[i % CHARACTERS.length].id);
     });
+    if (enabled) topStage.setLeaders([0, 1, 2].map((i) => ({ rank: i + 1, uniqueId: `demo:top:${i}`, nickname: ['Ngôi Sao Đêm', 'Luna VIP', 'Akira Club'][i], diamonds: [1800, 950, 500][i], gifts: [18, 19, 10][i], characterId: ['hikari', 'luna', 'akira'][i] })), true, elapsed);
+    else topStage.setLeaders(lastRankings?.leaders || [], false, elapsed);
+  }
+
+  function setTopGifters(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.leaders)) return false;
+    if (snapshot.epoch === rankingEpoch && snapshot.revision < rankingRevision) return false;
+    if (snapshot.epoch !== rankingEpoch || snapshot.session !== rankingSession) {
+      characterSelections.clear(); topCameraCursor = 0; topCameraRank = null;
+    }
+    rankingEpoch = snapshot.epoch; rankingSession = snapshot.session; rankingRevision = snapshot.revision;
+    const seen = new Set();
+    const leaders = snapshot.leaders.filter((entry) => entry.uniqueId && !seen.has(entry.uniqueId) && seen.add(entry.uniqueId)).slice(0, 3)
+      .map((entry, index) => ({ ...entry, uniqueId: String(entry.uniqueId), rank: index + 1,
+        characterId: CHARACTERS.some((character) => character.id === entry.characterId) ? entry.characterId : CHARACTERS[hash(String(entry.uniqueId)) % CHARACTERS.length].id }));
+    for (const entry of leaders) {
+      characterSelections.set(entry.uniqueId, CHARACTERS.findIndex((character) => character.id === entry.characterId));
+      if (actors.has(entry.uniqueId)) selectCharacter(entry.uniqueId, entry.characterId, true);
+    }
+    lastRankings = { ...snapshot, leaders };
+    topStage.setLeaders(leaders, false, elapsed);
+    return true;
   }
 
   function ensureHost() {
@@ -448,6 +489,13 @@ window.createClubScene = function createClubScene(container) {
     host.user = { ...host.user, nickname: hostName };
     host.label.querySelector('strong').textContent = hostName;
     return hostName;
+  }
+
+  function setHostCharacter(value) {
+    if (!CHARACTERS.some((config) => config.id === value)) return false;
+    hostCharacter = value;
+    selectCharacter(ensureHost().id, value);
+    return true;
   }
 
   function showMessage(user, text, admit = true) {
@@ -471,15 +519,22 @@ window.createClubScene = function createClubScene(container) {
   function startGift(job) {
     const actor = actors.get(job.id);
     if (!actor) return;
+    clearPortraitFocus();
+    const accent = CHARACTERS[actor.variant].accent;
+    container.style.setProperty('--focus-accent', accent);
+    focusLight.color.set(accent).lerp(new THREE.Color('#fff8f2'), 0.82);
+    giftRing.material.color.set(accent);
+    topCameraRank = null; topCameraUser = '';
     activeGift = { ...job, started: elapsed, until: elapsed + 6.4,
       fromPosition: camera.position.clone(), fromTarget: controls.target.clone() };
     controls.enabled = false;
     giftRing.position.set(actor.group.position.x, 0.025, actor.group.position.z);
     giftRing.visible = true;
     actor.label.classList.add('featured');
+    actor.message.hidden = true; actor.messageUntil = 0;
     container.dataset.cameraMode = 'focus';
     container.dataset.focusedUser = actor.id;
-    onEvent('club:gift', { user: actor.user, gift: job.data, preview: actor.isDemo || job.data.preview === true });
+    onEvent('club:gift', { user: actor.user, gift: job.data, character: CHARACTERS[actor.variant], preview: actor.isDemo || job.data.preview === true });
   }
 
   function focusGift(user, data) {
@@ -487,7 +542,7 @@ window.createClubScene = function createClubScene(container) {
     if (activeGift?.id === actor.id && elapsed < activeGift.until - 1) {
       activeGift.until = Math.min(activeGift.started + 11, elapsed + 4);
       activeGift.data = { ...data, count: (Number(activeGift.data.count) || 1) + (Number(data.count) || 1) };
-      onEvent('club:gift', { user: actor.user, gift: activeGift.data, preview: actor.isDemo || activeGift.data.preview === true });
+      onEvent('club:gift', { user: actor.user, gift: activeGift.data, character: CHARACTERS[actor.variant], preview: actor.isDemo || activeGift.data.preview === true });
       return;
     }
     const job = { id: actor.id, data };
@@ -501,14 +556,22 @@ window.createClubScene = function createClubScene(container) {
 
   function resumeDirector() {
     directorEpoch = elapsed;
+    clearPortraitFocus();
     shotKey = ''; cameraTransition = null;
+    topCameraRank = null; topCameraUser = '';
+    cameraShot = cameraMode === 'mixed' ? 'overview' : cameraMode;
     controls.autoRotate = false;
     container.dataset.cameraMode = cameraMode;
     onEvent('club:camera-mode', { mode: cameraMode, shot: cameraMode === 'mixed' ? 'overview' : cameraMode, label: CAMERA_LABELS[cameraMode] });
   }
 
   function clearActiveGift() {
-    if (activeGift) actors.get(activeGift.id)?.label.classList.remove('featured');
+    if (activeGift) {
+      const actor = actors.get(activeGift.id);
+      actor?.label.classList.remove('featured'); actor?.avatar?.setSkill(false);
+    }
+    signatureEffect?.dispose(); signatureEffect = null;
+    delete container.dataset.skillCharacter;
     activeGift = null;
     giftRing.visible = false;
     focusLight.intensity = 0;
@@ -537,6 +600,39 @@ window.createClubScene = function createClubScene(container) {
     closeupTarget = candidates[index % Math.max(1, candidates.length)]?.id || HOST_ID;
   }
 
+  function topCameraSubject() {
+    return topCameraRank === null ? null : topStage.getCameraSubjects().find((subject) => subject.rank === topCameraRank) || null;
+  }
+
+  function clearPortraitFocus() {
+    portraitFocus?.effect.dispose(); portraitFocus = null;
+    delete container.dataset.portraitFocus;
+  }
+
+  function updatePortraitFocus(shot) {
+    let subject = null;
+    if (shot === 'top') {
+      const top = topCameraSubject();
+      if (top) subject = { id: top.uniqueId, position: top.position, scale: top.scale, accent: top.accent };
+    } else if (shot === 'closeup') {
+      const actor = actors.get(closeupTarget);
+      if (actor) subject = { id: actor.id, position: actor.group.position, scale: 1, accent: CHARACTERS[actor.variant].accent };
+    }
+    if (!subject) { clearPortraitFocus(); return; }
+    const key = `${shot}:${subject.id}:${subject.accent}`;
+    if (portraitFocus?.key !== key) clearPortraitFocus();
+    if (!portraitFocus) {
+      if (elapsed - shotEpoch < 1.05) return;
+      const effect = createFocusAura(subject.accent); scene.add(effect.root);
+      portraitFocus = { key, userId: subject.id, kind: shot, started: elapsed, effect };
+    }
+    container.dataset.portraitFocus = shot;
+    container.style.setProperty('--focus-accent', subject.accent);
+    portraitFocus.effect.root.position.copy(subject.position); portraitFocus.effect.root.scale.setScalar(subject.scale);
+    const shotRemaining = SHOT_SECONDS - Math.max(0, elapsed - directorEpoch) % SHOT_SECONDS;
+    portraitFocus.effect.update(elapsed - portraitFocus.started, camera, ease(Math.min(1, shotRemaining / 0.6)));
+  }
+
   function directorPose(shot) {
     const portrait = width / height < 0.9;
     const target = homeTarget.clone();
@@ -557,16 +653,33 @@ window.createClubScene = function createClubScene(container) {
         position.copy(actor.group.position).add(new THREE.Vector3(1.3, 2.1, 5.1));
       }
     }
+    if (shot === 'top') {
+      const subject = topCameraSubject();
+      if (subject) {
+        target.copy(subject.position).add(new THREE.Vector3(0, 1.45 * subject.scale, 0.45));
+        const drift = Math.sin((elapsed - shotEpoch) * 0.24) * 0.45;
+        position.copy(subject.position).add(new THREE.Vector3(drift, 2.3 * subject.scale, portrait ? 7.1 : 6.8));
+      }
+    }
     return { position, target };
   }
 
   function updateDirector() {
     const cycle = Math.floor(Math.max(0, elapsed - directorEpoch) / SHOT_SECONDS);
-    const shot = cameraMode === 'mixed' ? MIXED_SHOTS[cycle % MIXED_SHOTS.length] : cameraMode;
-    const nextKey = shot + (shot === 'closeup' ? ':' + cycle : '');
-    if (nextKey !== shotKey || (shot === 'closeup' && !actors.has(closeupTarget))) {
+    const subjects = cameraMode === 'mixed' ? topStage.getCameraSubjects() : [];
+    const mixedShots = subjects.length ? MIXED_TOP_SHOTS : MIXED_SHOTS;
+    const shot = cameraMode === 'mixed' ? mixedShots[cycle % mixedShots.length] : cameraMode;
+    const nextKey = shot + (cameraMode === 'mixed' || shot === 'closeup' ? ':' + cycle : '');
+    const selectedTop = subjects.find((subject) => subject.rank === topCameraRank);
+    const chooseTop = shot === 'top' && (nextKey !== shotKey || !selectedTop);
+    const changedTop = shot === 'top' && selectedTop?.uniqueId !== topCameraUser;
+    if (nextKey !== shotKey || (shot === 'closeup' && !actors.has(closeupTarget)) || chooseTop || changedTop) {
       shotKey = nextKey; cameraShot = shot; shotEpoch = elapsed;
       if (shot === 'closeup') chooseCloseup(cycle);
+      if (shot === 'top') {
+        if (chooseTop) topCameraRank = subjects[topCameraCursor++ % subjects.length].rank;
+        topCameraUser = topCameraSubject()?.uniqueId || '';
+      } else { topCameraRank = null; topCameraUser = ''; }
       controls.autoRotate = false;
       // Clear leftover orbit damping before the director takes ownership.
       controls.enableDamping = false; controls.update(); controls.enableDamping = true;
@@ -588,22 +701,16 @@ window.createClubScene = function createClubScene(container) {
       controls.enabled = false; camera.lookAt(controls.target);
     } else controls.enabled = true;
     if (controls.enabled) controls.update();
+    updatePortraitFocus(shot);
   }
 
-  const modelReady = new GLTFLoader().loadAsync('/models/club-dancer.glb').then((gltf) => {
+  const modelReady = loadAnimeTemplate().then((template) => {
     if (disposed) return;
-    model = gltf.scene;
-    // Skin bounds require every bone's world matrix to be current before measuring.
-    model.updateMatrixWorld(true);
-    model.traverse((child) => { if (child.isSkinnedMesh) child.computeBoundingBox(); });
-    const bounds = new THREE.Box3().setFromObject(model, true);
-    modelScale = 2.1 / bounds.getSize(new THREE.Vector3()).y;
-    modelOffset = -bounds.min.y * modelScale;
-    danceClip = gltf.animations.find((clip) => /samba|dance/i.test(clip.name)) || gltf.animations[0];
-    if (!danceClip) throw new Error('Model chưa có animation nhảy.');
+    model = template;
     actors.forEach(attachModel);
+    topStage.setLibrary(template, elapsed);
     container.dataset.ready = 'true';
-    onEvent('club:ready', { animations: gltf.animations.map((clip) => clip.name) });
+    onEvent('club:ready', { characters: CHARACTERS.map((config) => config.id) });
   }).catch((error) => {
     container.dataset.ready = 'error';
     onEvent('club:error', { message: 'Không tải được nhân vật 3D. Hãy tải lại trang.', detail: error.message });
@@ -615,9 +722,20 @@ window.createClubScene = function createClubScene(container) {
     if (!actor) { resetCamera(); return; }
     const age = elapsed - activeGift.started;
     const remaining = activeGift.until - elapsed;
-    const target = actor.group.position.clone().add(new THREE.Vector3(0, 1.05, 0));
+    // Start the signature only once the camera has arrived. Queued dancers
+    // continue their regular dance until their own shot starts.
+    if (age >= 1.1 && remaining > 0.5 && !signatureEffect && actor.avatar) {
+      actor.avatar.setSkill(true);
+      signatureEffect = createSignatureEffect(CHARACTERS[actor.variant]);
+      signatureEffect.root.position.copy(actor.group.position);
+      scene.add(signatureEffect.root);
+      container.dataset.skillCharacter = CHARACTERS[actor.variant].id;
+      onEvent('club:skill', { userId: actor.id, character: CHARACTERS[actor.variant] });
+    }
+    const target = actor.group.position.clone().add(new THREE.Vector3(0, 1.18, 0));
     const angle = 0.25 + Math.sin(age * 0.28) * 0.18;
-    const close = actor.group.position.clone().add(new THREE.Vector3(Math.sin(angle) * 4.8, 2.0, Math.cos(angle) * 4.8));
+    const distance = CHARACTERS[actor.variant].id === 'hikari' ? 6.7 : 5.7;
+    const close = actor.group.position.clone().add(new THREE.Vector3(Math.sin(angle) * distance, 2.2, Math.cos(angle) * distance));
     if (age < 1.1) {
       const t = ease(age / 1.1);
       camera.position.lerpVectors(activeGift.fromPosition, close, t);
@@ -630,10 +748,12 @@ window.createClubScene = function createClubScene(container) {
       controls.target.lerpVectors(target, pose.target, t);
     } else { camera.position.copy(close); controls.target.copy(target); }
     camera.lookAt(controls.target);
+    if (signatureEffect) signatureEffect.update(age - 1.1, Math.min(1, Math.max(0, (age - 1.1) * 3), Math.max(0, remaining * 2)), camera);
     focusLight.position.copy(target).add(new THREE.Vector3(0, 1.7, 1.4));
-    focusLight.intensity = Math.min(16, age * 16) * Math.min(1, Math.max(0, remaining));
-    giftRing.scale.setScalar(1 + Math.sin(elapsed * 5) * 0.07);
-    giftRing.material.opacity = 0.7 + Math.sin(elapsed * 8) * 0.22;
+    focusLight.intensity = Math.min(2.1, age * 2.1) * Math.min(1, Math.max(0, remaining));
+    giftRing.visible = !signatureEffect;
+    giftRing.scale.setScalar(0.8 + ease(Math.min(age / 1.1, 1)) * 0.2);
+    giftRing.material.opacity = Math.min(1, age * 2) * 0.35;
     if (remaining <= 0) {
       clearActiveGift();
       const next = focusQueue.shift();
@@ -679,22 +799,27 @@ window.createClubScene = function createClubScene(container) {
       }
       lasers.instanceMatrix.needsUpdate = true;
     }
+    const giftBanner = activeGift ? container.querySelector('#gift-feature') : null;
+    const labelCeiling = giftBanner && !giftBanner.hidden ? giftBanner.offsetTop + giftBanner.offsetHeight + 10 : 0;
     actors.forEach((actor) => {
-      if (actor.head) actor.head.scale.setScalar(0.8);
+      actor.avatar?.update(delta, elapsed);
       if (actor.messageUntil && elapsed > actor.messageUntil) { actor.message.hidden = true; actor.messageUntil = 0; }
-      if (actor.action) actor.action.timeScale = (0.88 + actor.variant * 0.035) * (actor.reactUntil > elapsed ? 1.3 : 1);
-      projection.copy(actor.group.position).y += 2.34;
+      if (actor.mixer) actor.mixer.timeScale = 1;
+      projection.copy(actor.group.position).y += actor.avatar?.labelHeight || 2.58;
       projection.project(camera);
       const visible = projection.z < 1 && projection.z > -1 && Math.abs(projection.x) < 1.18 && Math.abs(projection.y) < 1.15;
       actor.label.hidden = !visible;
       if (visible) {
-        actor.label.style.transform = `translate(-50%, -100%) translate(${(projection.x * 0.5 + 0.5) * width}px, ${(-projection.y * 0.5 + 0.5) * height}px)`;
+        const projectedY = (-projection.y * 0.5 + 0.5) * height;
+        const labelY = activeGift?.id === actor.id ? Math.max(projectedY, labelCeiling + actor.label.offsetHeight) : projectedY;
+        actor.label.style.transform = `translate(-50%, -100%) translate(${(projection.x * 0.5 + 0.5) * width}px, ${labelY}px)`;
         const distance = camera.position.distanceTo(actor.group.position);
         actor.label.style.setProperty('--label-scale', Math.min(1, Math.max(0.64, 11 / distance)));
         actor.label.style.zIndex = String(1000 - Math.round(distance * 10));
       }
     });
     updateCamera();
+    topStage.update(delta, elapsed, camera, width, height, !!activeGift, activeGift ? null : topCameraRank, !!portraitFocus);
     renderer.info.reset();
     if (lightweight) renderer.render(scene, camera);
     else composer.render();
@@ -713,7 +838,14 @@ window.createClubScene = function createClubScene(container) {
     removeParticipant,
     resetParticipants,
     setPreview,
+    setTopGifters,
     setHostName,
+    setStageName,
+    setNowPlaying(track) { topStage.setNowPlaying(track); },
+    setHostCharacter,
+    selectCharacter,
+    getCharacters() { return CHARACTERS.map((config) => ({ ...config })); },
+    getTopRoles() { return [...TOP_ROLES]; },
     setCameraMode,
     setLaserEnabled(value) { laserEnabled = value === true; lasers.visible = laserEnabled; },
     showMessage,
@@ -730,27 +862,38 @@ window.createClubScene = function createClubScene(container) {
     changeAvatar(id) {
       const actor = actors.get(id) || actors.get(activeGift?.id) || actors.values().next().value;
       if (!actor) return;
-      actor.variant = (actor.variant + 1) % PALETTES.length;
-      if (actor.model) applyPalette(actor);
-      return actor.palette;
+      return selectCharacter(actor.id, CHARACTERS[(actor.variant + 1) % CHARACTERS.length].id)?.name;
     },
     toggleLights() { lightsOn = !lightsOn; return lightsOn; },
     toggleOrbit() { const enabled = cameraMode !== 'orbit'; setCameraMode(enabled ? 'orbit' : 'overview'); return enabled; },
     getSnapshot(includeBounds = false) {
+      const topSubject = !activeGift && topCameraSubject();
       return { ready: !!model, preview, actorCount: actors.size, animatedCount: mixers.size, fps: frameRate,
         cameraMode: activeGift ? 'focus' : cameraMode, selectedCameraMode: cameraMode, cameraShot,
+        cameraTop: topSubject ? { rank: topSubject.rank, uniqueId: topSubject.uniqueId, nickname: topSubject.nickname } : null,
         shotDurationSeconds: SHOT_SECONDS, directorElapsed: elapsed - directorEpoch,
-        hostName, hostId: HOST_ID, viewerCount: [...actors.values()].filter((actor) => !actor.isHost && !actor.isDemo).length,
+        stageName, stageLogoVersion: logoTexture.version, hostName, hostCharacter, hostId: HOST_ID, viewerCount: [...actors.values()].filter((actor) => !actor.isHost && !actor.isDemo).length,
+        activeSkill: signatureEffect ? { userId: activeGift?.id, characterId: signatureEffect.characterId, name: signatureEffect.name, ...signatureEffect.getSnapshot() } : null,
+        cameraAura: portraitFocus ? { userId: portraitFocus.userId, kind: portraitFocus.kind } : null,
         focusedUser: activeGift?.id || null, queueLength: focusQueue.length,
         camera: camera.position.toArray(), target: controls.target.toArray(), lightsOn, laserEnabled,
-        laserBeamCount: lasers.visible ? laserCount : 0, mixedShots: [...MIXED_SHOTS],
+        laserBeamCount: lasers.visible ? laserCount : 0, mixedShots: [...(topStage.getCameraSubjects().length ? MIXED_TOP_SHOTS : MIXED_SHOTS)],
         inactivityTimeoutMs: INACTIVITY_TIMEOUT_MS,
-        participants: [...actors.values()].map((actor) => ({ id: actor.id, nickname: actor.user.nickname, isHost: actor.isHost, isDemo: actor.isDemo, palette: actor.palette, position: actor.group.position.toArray(), lastActiveAt: actor.lastActiveAt, ...(includeBounds ? { bounds: new THREE.Box3().setFromObject(actor.group, true) } : {}) })),
+        topGifters: topStage.getSnapshot(),
+        nowPlaying: topStage.getNowPlaying(),
+        participants: [...actors.values()].map((actor) => ({ id: actor.id, nickname: actor.user.nickname, isHost: actor.isHost, isDemo: actor.isDemo, palette: actor.palette,
+          characterId: CHARACTERS[actor.variant].id, dance: CHARACTERS[actor.variant].dance, skill: CHARACTERS[actor.variant].skill,
+          body: CHARACTERS[actor.variant].body, outfit: CHARACTERS[actor.variant].outfit,
+          motionSource: actor.avatar?.motionSource,
+          choreography: actor.avatar?.getChoreography(),
+          animation: actor.avatar?.special.isRunning() && actor.avatar.special.getEffectiveWeight() > 0.5 ? 'skill' : 'dance', animationTime: actor.mixer?.time || 0,
+          position: actor.group.position.toArray(), lastActiveAt: actor.lastActiveAt, ...(includeBounds ? { bounds: new THREE.Box3().setFromObject(actor.group, true) } : {}) })),
         triangles: renderer.info.render.triangles, calls: renderer.info.render.calls };
     },
     dispose() {
       disposed = true; clearInterval(inactivityTimer); document.removeEventListener('visibilitychange', onVisibilityChange);
       resetCamera(); [...actors.keys()].forEach((id) => removeParticipant(id, true));
+      topStage.dispose();
       resize.disconnect(); controls.dispose();
       composer.dispose(); renderer.dispose();
     }

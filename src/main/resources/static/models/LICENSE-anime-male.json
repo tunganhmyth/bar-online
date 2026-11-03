@@ -1,0 +1,21 @@
+{
+  "source": "https://github.com/madjin/vrm-samples/blob/master/vroid/beta/HairSample_Male.vrm",
+  "author": "pixiv Inc. / VRoid Project",
+  "licenseSource": "https://vroid.pixiv.help/hc/en-us/articles/4402614652569-Do-VRoid-Studio-s-sample-models-come-with-conditions-of-use",
+  "sha256": "7aeca142dabbc26ba0f5b9c998c8f3cb6df341287d67788427ac837223785a3f",
+  "embeddedLicense": {
+    "version": "",
+    "author": "",
+    "contactInformation": "",
+    "reference": "",
+    "title": "HairSample_Male",
+    "texture": 24,
+    "allowedUserName": "Everyone",
+    "violentUssageName": "Allow",
+    "sexualUssageName": "Allow",
+    "commercialUssageName": "Allow",
+    "otherPermissionUrl": "",
+    "licenseName": "CC0",
+    "otherLicenseUrl": ""
+  }
+}

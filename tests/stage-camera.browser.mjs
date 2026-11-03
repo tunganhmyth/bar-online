@@ -57,6 +57,9 @@ try {
   await page.locator('#host-name').fill('DJ Chủ Sàn');
   await page.locator('#save-host').click();
   await obs.waitForFunction(() => window.clubScene.getSnapshot().hostName === 'DJ Chủ Sàn');
+  await page.locator('#host-character').selectOption('yuki');
+  await obs.waitForFunction(() => window.clubScene.getSnapshot().hostCharacter === 'yuki');
+  await page.waitForFunction(() => window.clubScene.getSnapshot().participants[0].characterId === 'yuki');
   console.log('PASS one permanent host; name is saved across reload and synchronized to OBS via SSE.');
   await page.locator('#laser-toggle').click();
   await page.waitForFunction(() => window.clubScene.getSnapshot().laserBeamCount === 36);
@@ -128,6 +131,6 @@ try {
   assert.deepEqual(errors, []);
   console.log('PASS gifts take priority then resume the selected camera; reset and music autoplay work without browser errors.');
 } finally {
-  if (api && original) await api.put(`${base}/api/stage/settings`, { data: { hostName: original.hostName, cameraMode: original.cameraMode, laserEnabled: original.laserEnabled === true } });
+  if (api && original) await api.put(`${base}/api/stage/settings`, { data: { hostName: original.hostName, hostCharacter: original.hostCharacter || 'sakura', cameraMode: original.cameraMode, laserEnabled: original.laserEnabled === true } });
   await browser.close();
 }

@@ -48,23 +48,62 @@ class TikTokLiveIntegrationTests {
     @Autowired ObjectMapper mapper;
 
     @Test
+    void countsGiftsOnTheServerAndReplaysTopThreeToNewObservers() throws Exception {
+        HttpURLConnection stream = (HttpURLConnection) new URL("http://localhost:" + port + "/api/live/events").openConnection();
+        stream.setReadTimeout(6000);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream.getInputStream(), StandardCharsets.UTF_8))) {
+            http.postForEntity("/api/live/connect", Collections.singletonMap("username", "leaderboard_test"), String.class);
+            JsonNode board = null;
+            for (int lines = 0; lines < 90; lines++) {
+                String line = reader.readLine(); assertNotNull(line);
+                if (!line.startsWith("data:")) continue;
+                JsonNode event = mapper.readTree(line.substring(5));
+                if ("top-gifters".equals(event.path("type").asText())) {
+                    JsonNode candidate = event.path("data");
+                    if (candidate.path("leaders").size() == 3 && candidate.path("leaders").get(0).path("diamonds").asLong() == 110) { board = candidate; break; }
+                }
+            }
+            assertNotNull(board);
+            assertEquals("rank-b", board.path("leaders").get(0).path("uniqueId").asText());
+            assertEquals("hikari", board.path("leaders").get(0).path("characterId").asText());
+            assertEquals(11, board.path("leaders").get(0).path("gifts").asLong());
+            assertEquals(board, http.getForObject("/api/live/top-gifters", JsonNode.class));
+            HttpURLConnection observer = (HttpURLConnection) new URL("http://localhost:" + port + "/api/live/events").openConnection();
+            observer.setReadTimeout(3000);
+            try (BufferedReader initial = new BufferedReader(new InputStreamReader(observer.getInputStream(), StandardCharsets.UTF_8))) {
+                boolean received = false;
+                for (int lines = 0; lines < 12 && !received; lines++) {
+                    String line = initial.readLine(); assertNotNull(line);
+                    if (!line.startsWith("data:")) continue;
+                    JsonNode event = mapper.readTree(line.substring(5));
+                    received = "top-gifters".equals(event.path("type").asText()) && board.equals(event.path("data"));
+                }
+                assertTrue(received, "New OBS tabs get the existing score without replaying gifts");
+            } finally { observer.disconnect(); }
+        } finally { stream.disconnect(); live.disconnect(); }
+    }
+
+    @Test
     void updatesStageSettingsAndSynchronizesObservers() throws Exception {
         HttpURLConnection stream = (HttpURLConnection) new URL("http://localhost:" + port + "/api/live/events").openConnection();
         stream.setReadTimeout(5000);
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream.getInputStream(), StandardCharsets.UTF_8))) {
             Map<String, Object> update = new HashMap<>();
             update.put("hostName", "Chủ sàn Linh"); update.put("cameraMode", "mixed");
+            update.put("stageName", "Lâu Đài Ánh Trăng");
             JsonNode saved = http.exchange("/api/stage/settings", HttpMethod.PUT, new HttpEntity<>(update), JsonNode.class).getBody();
             assertNotNull(saved);
             assertEquals("Chủ sàn Linh", saved.path("hostName").asText());
             assertEquals("mixed", saved.path("cameraMode").asText());
+            assertEquals("Lâu Đài Ánh Trăng", saved.path("stageName").asText());
             boolean received = false;
             for (int lines = 0; lines < 30 && !received; lines++) {
                 String line = reader.readLine(); assertNotNull(line);
                 if (line.startsWith("data:")) {
                     JsonNode event = mapper.readTree(line.substring(5));
                     received = "stage-settings".equals(event.path("type").asText())
-                            && event.path("data").path("revision").asLong() == saved.path("revision").asLong();
+                            && event.path("data").path("revision").asLong() == saved.path("revision").asLong()
+                            && "Lâu Đài Ánh Trăng".equals(event.path("data").path("stageName").asText());
                 }
             }
             assertTrue(received, "Settings update reaches existing OBS/browser streams");

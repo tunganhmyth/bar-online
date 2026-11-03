@@ -1,4 +1,49 @@
 .host-form { margin: 0 0 18px; }
+#character-labels { z-index: 30; }
+.stage::after { content: ''; position: absolute; inset: 0; z-index: 18; pointer-events: none; border-radius: inherit; opacity: 0; transition: opacity .55s ease; background: radial-gradient(ellipse at 50% 48%, transparent 38%, #05061150 100%); box-shadow: inset 0 0 40px color-mix(in srgb, var(--focus-accent, #d6b1ff) 17%, transparent); }
+.stage[data-camera-mode="focus"]::after { opacity: 1; }
+.stage[data-portrait-focus]::after { opacity: .5; }
+.stage[data-camera-mode="focus"] .gift-feature { border-color: var(--focus-accent); box-shadow: 0 4px 22px #0006, 0 0 18px color-mix(in srgb, var(--focus-accent) 18%, transparent); }
+.stage[data-skill-character] .gift-symbol { color: var(--focus-accent); border-color: var(--focus-accent); box-shadow: 0 0 12px color-mix(in srgb, var(--focus-accent) 24%, transparent); transition: box-shadow .5s ease, color .5s ease; }
+.music-picker { margin-bottom: 16px; }
+.music-picker select { width: 100%; min-width: 0; padding: 11px 9px; color: #f2dbea; background: #201522; border: 1px solid #754665; border-radius: 6px; font: inherit; font-size: 10px; cursor: pointer; }
+.music-picker select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.music-picker select:disabled { opacity: .5; cursor: default; }
+.track > div { min-width: 0; }
+.track strong, .track small { overflow-wrap: anywhere; }
+#top-gifter-labels { position: absolute; inset: 0; pointer-events: none; z-index: 35; }
+.podium-label { position: absolute; top: 0; left: 0; width: 106px; padding: 5px 7px; border: 1px solid var(--rank-color); border-radius: 7px; background: linear-gradient(135deg, #221725ed, #111321e8); text-align: center; box-shadow: 0 3px 16px #0008; pointer-events: none; }
+.podium-label small { display: block; color: var(--rank-color); font-size: 7px; font-weight: 700; letter-spacing: .7px; }
+.podium-label strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #fff5ea; margin: 3px 0; }
+.podium-label > span { display: block; color: var(--rank-color); font-size: 9px; font-weight: 700; letter-spacing: .2px; }
+.podium-label.is-empty { opacity: .48; }
+.podium-label.is-focused { width: 154px; padding: 8px 10px; box-shadow: 0 3px 20px #000a, 0 0 18px color-mix(in srgb, var(--rank-color) 25%, transparent); }
+.podium-label.is-focused small { font-size: 9px; }
+.podium-label.is-focused strong { font-size: 13px; }
+.podium-label.is-focused > span { font-size: 10px; }
+.top-gifters-list { display: grid; gap: 8px; }
+.top-empty { color: #9885a0; font-size: 9px; line-height: 1.7; margin: 0; }
+.top-gifter-row { display: flex; gap: 9px; align-items: center; padding: 8px; border: 1px solid #3c2c43; border-radius: 6px; background: #17121f; }
+.top-gifter-row > b { color: var(--rank-color); font-size: 17px; width: 20px; text-align: center; }
+.top-gifter-row > div { min-width: 0; flex: 1; }
+.top-gifter-row strong { display: block; color: #ede1f3; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-gifter-row small { display: block; color: #9b86a7; font-size: 8px; margin-top: 4px; }
+.top-gifter-row > span { color: var(--rank-color); font-size: 9px; white-space: nowrap; }
+.stage-wordmark { flex: 1; min-width: 0; margin-right: 16px; }
+.stage-name-label { display: block; font-weight: inherit; white-space: nowrap; letter-spacing: 1.5px; line-height: 1.2; }
+.character-picker { margin-bottom: 18px; }
+.character-picker select { width: 100%; padding: 11px 9px; color: #f2dbea; background: #201522; border: 1px solid #754665; border-radius: 6px; font: inherit; font-size: 10px; cursor: pointer; }
+.character-picker select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.character-description { margin: 8px 0; color: #c599b7; font-size: 8px; line-height: 1.7; }
+.character-roster { border-top: 1px solid #38283d; padding-top: 9px; }
+.character-roster summary { color: #af97b5; font-size: 9px; cursor: pointer; }
+.character-roster summary span { float: right; color: #edaccb; }
+.roster-character { margin-top: 10px; border-left: 2px solid var(--character-color); padding: 4px 0 4px 9px; }
+.roster-character strong, .roster-character span, .roster-character small { display: block; font-size: 8px; line-height: 1.8; }
+.roster-character strong { color: var(--character-color); font-size: 9px; }
+.roster-character span { color: #b2a8c0; }
+.roster-character small { color: #8f809b; }
+.gift-skill { display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; font-size: 8px; color: #f4c2e1; letter-spacing: .02em; }
 .host-input-row { display: flex; align-items: stretch; gap: 7px; }
 .host-input-row .input-wrap { flex: 1; min-width: 0; }
 .host-input-row button { flex-shrink: 0; padding: 0 10px; background: #39243b; border: 1px solid #704764; border-radius: 6px; font-size: 9px; }

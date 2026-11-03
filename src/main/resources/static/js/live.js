@@ -11,7 +11,10 @@
   const mode = document.getElementById('stage-mode');
   const giftFeature = document.getElementById('gift-feature');
   const hostForm = document.getElementById('host-form');
+  const stageNameForm = document.getElementById('stage-name-form');
+  const stageNameInput = document.getElementById('stage-name');
   const hostInput = document.getElementById('host-name');
+  const characterSelect = document.getElementById('host-character');
   const cameraSelect = document.getElementById('camera-mode');
   const laserToggle = document.getElementById('laser-toggle');
   const settingsStatus = document.getElementById('stage-settings-status');
@@ -30,6 +33,10 @@
   }
   function showError(message) { error.textContent = message || ''; error.hidden = !message; }
   function cameraLabel(value) {
+    if (value === 'top') {
+      const subject = club?.getSnapshot().cameraTop;
+      return subject ? `Top ${subject.rank} · ${subject.nickname}` : 'Top quà tặng';
+    }
     return [...(cameraSelect?.options || [])].find((option) => option.value === value)?.textContent || value;
   }
   function renderCameraStatus() {
@@ -58,7 +65,7 @@
   });
   stage.addEventListener('club:participants', (event) => { document.getElementById('dancer-count').textContent = event.detail.count; });
   stage.addEventListener('club:gift', (event) => {
-    const { user, gift, preview } = event.detail;
+    const { user, gift, preview, character } = event.detail;
     document.getElementById('gift-user').textContent = user.nickname || user.uniqueId;
     document.getElementById('gift-description').textContent = `${gift.count || 1} × ${gift.giftName || 'Quà tặng'} · Cảm ơn bạn đã tỏa sáng!`;
     document.getElementById('gift-caption').textContent = preview ? 'XEM THỬ · CAMERA QUÀ TẶNG' : 'TÂM ĐIỂM ĐÊM NAY';
@@ -67,6 +74,8 @@
     const progress = giftFeature.querySelector('.gift-progress');
     progress.style.animation = 'none'; void progress.offsetWidth; progress.style.animation = '';
     document.getElementById('camera-status').textContent = 'CẬN CẢNH · NGƯỜI TẶNG QUÀ';
+    const skill = document.getElementById('gift-skill');
+    if (skill) skill.textContent = character ? `${character.name} · ${character.skill}` : '';
   });
   stage.addEventListener('club:gift-end', () => {
     giftFeature.hidden = true;
@@ -82,16 +91,130 @@
     console.error(failure);
   }
 
+  const characters = club?.getCharacters() || [];
+  function renderTopGifters(snapshot) {
+    const list = document.getElementById('top-gifters-list');
+    if (!list) return;
+    list.replaceChildren();
+    if (!snapshot.leaders.length) {
+      const empty = document.createElement('p'); empty.className = 'top-empty'; empty.textContent = 'Chưa có quà trong phiên kết nối này.'; list.append(empty);
+    }
+    const colors = ['#ffd37a', '#8ce5ff', '#f9a3be'];
+    for (const entry of snapshot.leaders) {
+      const row = document.createElement('div'); row.className = 'top-gifter-row'; row.style.setProperty('--rank-color', colors[entry.rank - 1]);
+      const rank = document.createElement('b'); rank.textContent = entry.rank;
+      const text = document.createElement('div');
+      const name = document.createElement('strong'); name.textContent = entry.nickname || entry.uniqueId;
+      const details = document.createElement('small'); details.textContent = `${Number(entry.gifts).toLocaleString('vi')} quà · ${characters.find((character) => character.id === entry.characterId)?.name || ''}`;
+      text.append(name, details);
+      const score = document.createElement('span'); score.textContent = (club?.getTopRoles?.() || ['Cơ Trưởng', 'Cơ Phó', 'Tiếp viên'])[entry.rank - 1];
+      row.append(rank, text, score); list.append(row);
+    }
+    const note = document.getElementById('top-gifters-note');
+    if (note) note.textContent = `Xếp hạng quà${snapshot.channel ? ' @' + snapshot.channel : ''} · Đồng bộ OBS`;
+  }
+  for (const option of characterSelect?.options || []) {
+    const character = characters.find((item) => item.id === option.value);
+    if (character) option.textContent = `${character.name} · ${character.title}`;
+  }
+  const roster = document.getElementById('character-roster');
+  for (const character of characters) {
+    const card = document.createElement('div'); card.className = 'roster-character';
+    card.style.setProperty('--character-color', character.accent);
+    const name = document.createElement('strong'); name.textContent = `${character.name} · ${character.title}`;
+    const dance = document.createElement('span'); dance.textContent = character.dance;
+    const skill = document.createElement('small'); skill.textContent = `✧ ${character.skill}`;
+    card.append(name, dance, skill); roster?.append(card);
+  }
+
+  const music = document.getElementById('music');
+  const enableMusic = document.getElementById('enable-music');
+  const musicSelect = document.getElementById('music-track');
+  const musicStatus = document.getElementById('music-status');
+  const musicTracks = [
+    { id: 'forever-one-love', title: 'FOREVER ONE LOVE #2', artist: 'DARKD x DAVID SEA', file: 'FOREVER ONE LOVE #2 _ DARKD x DAVID SEA.m4a' },
+    { id: 'hon-bat-cu-ai', title: 'HƠN BẤT CỨ AI 2026', artist: 'QUIZ', file: 'HON BAT CU AI 2026 - QUIZ-1601452629.mp3' },
+    { id: 'ket-thuc-va-chia-tay', title: 'KẾT THÚC VÀ CHIA TAY 2026', artist: 'DZUONG x RICK', file: 'Kết Thúc Và Chia Tay 2026 - DZUONG X RICK.m4a' },
+    { id: 'ngay-nay-nam-ay', title: 'NGÀY NÀY NĂM ẤY', artist: 'DUONGDINN', file: 'NGAY NAY NAM AY - DUONGDINN-1805857821.m4a' },
+    { id: 'nonstop-vinahouse', title: 'NONSTOP VINAHOUSE 2025', artist: 'Vào phòng bay phải mở bài này', file: 'YTSave.to_YouTube_Media_7f-49jDbK10_NONSTOP-VINAHOUSE-2025-VÀO-PHÒNG-BAY-PHẢI-MỞ-BÀI-NÀY-NHẠC-SÀN-BAY-PHÒNG-BASS-CĂN_009_vbr.mp3' }
+  ];
+  let currentMusicId = null;
+  for (const item of musicTracks) {
+    const option = document.createElement('option'); option.value = item.id;
+    option.textContent = `${item.title} · ${item.artist}`; musicSelect?.append(option);
+  }
+  music.volume = 0.4; music.autoplay = true; music.loop = true;
+  function hideMusicPrompt() {
+    enableMusic.hidden = true;
+    document.removeEventListener('pointerdown', startMusic); document.removeEventListener('keydown', startMusic);
+  }
+  async function startMusic() {
+    const requestedSource = music.src;
+    try { await music.play(); hideMusicPrompt(); }
+    catch (failure) {
+      if (failure.name === 'NotAllowedError' && music.src === requestedSource) {
+        enableMusic.hidden = false;
+        document.addEventListener('pointerdown', startMusic); document.addEventListener('keydown', startMusic);
+      }
+    }
+  }
+  function selectMusic(id) {
+    const selected = musicTracks.find((item) => item.id === id) || musicTracks[0];
+    club?.setNowPlaying?.(selected);
+    if (musicSelect) musicSelect.value = selected.id;
+    if (currentMusicId === selected.id) return;
+    currentMusicId = selected.id;
+    hideMusicPrompt();
+    // Encode the entire filename, including #, spaces and Vietnamese characters.
+    music.src = '/music/' + encodeURIComponent(selected.file);
+    music.setAttribute('aria-label', `${selected.title} · ${selected.artist}`);
+    const track = document.querySelector('.track');
+    if (track) {
+      track.querySelector('strong').textContent = selected.title;
+      track.querySelector('small').textContent = selected.artist;
+      track.querySelector(':scope > div > span').textContent = `LIVE MIX · ${selected.file.split('.').pop().toUpperCase()}`;
+    }
+    void startMusic();
+  }
+  music.addEventListener('play', hideMusicPrompt);
+  enableMusic.addEventListener('click', startMusic);
+  music.addEventListener('error', () => {
+    hideMusicPrompt();
+    const message = 'Không tải được bài nhạc. Hãy chọn bài khác hoặc tải lại trang.';
+    if (musicStatus) musicStatus.textContent = message;
+    announce(message);
+  });
+  musicSelect?.addEventListener('change', () => {
+    selectMusic(musicSelect.value);
+    if (musicStatus) musicStatus.textContent = 'Đang lưu bài nhạc…';
+    void saveSettings({ musicTrack: currentMusicId });
+  });
+
   function applySettings(value) {
     if (!value || !Number.isFinite(value.revision) || value.revision < savedSettings.revision) return;
     savedSettings = value;
+    selectMusic(value.musicTrack);
+    if (musicSelect) musicSelect.disabled = !Object.hasOwn(value, 'musicTrack');
+    if (musicStatus) musicStatus.textContent = Object.hasOwn(value, 'musicTrack')
+      ? `${musicTracks.length} bài · Tự phát và lặp lại · Đồng bộ bài với OBS`
+      : 'Khởi động lại server để bật chọn nhạc.';
+    club?.setStageName(value.stageName || 'MYTHMAKER');
+    if (stageNameInput && document.activeElement !== stageNameInput) stageNameInput.value = value.stageName || 'MYTHMAKER';
     club?.setHostName(value.hostName);
+    club?.setHostCharacter(value.hostCharacter || 'sakura');
+    if (characterSelect) characterSelect.value = value.hostCharacter || 'sakura';
+    const character = characters.find((item) => item.id === (value.hostCharacter || 'sakura'));
+    const description = document.getElementById('character-description');
+    if (description && character) description.textContent = `${character.dance} · ${character.skill}`;
     club?.setCameraMode(value.cameraMode);
     club?.setLaserEnabled(value.laserEnabled === true);
     if (laserToggle) laserToggle.setAttribute('aria-pressed', String(value.laserEnabled === true));
     if (hostInput && document.activeElement !== hostInput) hostInput.value = value.hostName;
     if (cameraSelect) cameraSelect.value = value.cameraMode;
-    [hostInput, cameraSelect, laserToggle, document.getElementById('save-host')].forEach((control) => { if (control) control.disabled = false; });
+    [hostInput, characterSelect, cameraSelect, laserToggle, document.getElementById('save-host')].forEach((control) => { if (control) control.disabled = false; });
+    if (Object.hasOwn(value, 'stageName')) [stageNameInput, document.getElementById('save-stage-name')].forEach((control) => { if (control) control.disabled = false; });
+    if (stageNameForm) stageNameForm.querySelector('.host-hint').textContent = Object.hasOwn(value, 'stageName')
+      ? 'Đổi chữ ở góc trên và bảng LED phía sau. Tối đa 32 ký tự.' : 'Khởi động lại server để bật đổi tên sàn.';
     if (settingsStatus) { settingsStatus.classList.remove('is-error'); settingsStatus.textContent = 'Đã lưu · Đồng bộ cùng nguồn OBS'; }
   }
   function settingsError(message) {
@@ -103,7 +226,7 @@
       const response = await fetch('/api/stage/settings');
       if (!response.ok) throw new Error('Khởi động lại server để dùng cài đặt chủ sàn và camera mới.');
       applySettings(await response.json());
-    } catch (failure) { settingsError(failure.message); }
+    } catch (failure) { selectMusic(); settingsError(failure.message); }
   }
   async function saveSettings(patch) {
     try {
@@ -112,7 +235,12 @@
       if (!response.ok) throw new Error(result.error || 'Không lưu được cài đặt sân khấu.');
       applySettings(result);
     } catch (failure) {
+      if (Object.hasOwn(patch, 'musicTrack')) {
+        selectMusic(savedSettings.musicTrack);
+        if (musicStatus) musicStatus.textContent = failure.message;
+      }
       if (cameraSelect) cameraSelect.value = savedSettings.cameraMode;
+      if (characterSelect) characterSelect.value = savedSettings.hostCharacter || 'sakura';
       settingsError(failure.message);
     }
   }
@@ -120,7 +248,12 @@
     event.preventDefault();
     void saveSettings({ hostName: hostInput.value.trim() });
   });
+  stageNameForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void saveSettings({ stageName: stageNameInput.value.trim() });
+  });
   cameraSelect?.addEventListener('change', () => { void saveSettings({ cameraMode: cameraSelect.value }); });
+  characterSelect?.addEventListener('change', () => { void saveSettings({ hostCharacter: characterSelect.value }); });
   void loadSettings();
 
   function updateState(state) {
@@ -166,12 +299,20 @@
   function handleEvent(event) {
     const data = event.data;
     if (event.type === 'stage-settings') { applySettings(data); return; }
+    if (event.type === 'top-gifters') {
+      if (club?.setTopGifters(data)) renderTopGifters(data);
+      return;
+    }
     if (event.type === 'state') { updateState(data); return; }
     if (!club) return;
     if (event.type === 'member') return;
     if (event.type === 'chat') {
       const command = String(data.comment || '').trim().toLocaleLowerCase('vi');
-      if (['đổi đồ', 'doi do', 'đổi nhân vật', 'doi nhan vat', 'đổi chó', 'doi cho', 'đổi cún', 'doi cun', '换修勾'].includes(command)) {
+      const requested = characters.find((item) => [`!${item.id}`, `nhân vật ${item.id}`, `nhan vat ${item.id}`].includes(command));
+      if (requested) {
+        club.addParticipant(data); club.selectCharacter(data.uniqueId, requested.id);
+        club.showMessage(data, `${requested.name} · ${requested.dance}`);
+      } else if (['đổi đồ', 'doi do', 'đổi nhân vật', 'doi nhan vat', 'đổi chó', 'doi cho', 'đổi cún', 'doi cun', '换修勾'].includes(command)) {
         club.addParticipant(data); const palette = club.changeAvatar(data.uniqueId);
         club.showMessage(data, `Phong cách ${palette || 'mới'}!`);
       } else club.showMessage(data, data.comment);
@@ -203,7 +344,14 @@
     if (club && !club.testGift()) announce('Chưa có ai trên sàn. Người xem cần bình luận hoặc tặng quà.');
   });
   document.getElementById('change-avatar').addEventListener('click', () => {
-    const palette = club?.changeAvatar(); if (palette) announce('Phong cách ' + palette);
+    const snapshot = club?.getSnapshot();
+    if (!snapshot) return;
+    if (snapshot.focusedUser && snapshot.focusedUser !== snapshot.hostId) {
+      const name = club.changeAvatar(snapshot.focusedUser); if (name) announce('Nhân vật ' + name);
+    } else {
+      const index = characters.findIndex((item) => item.id === snapshot.hostCharacter);
+      void saveSettings({ hostCharacter: characters[(index + 1) % characters.length].id });
+    }
   });
   document.getElementById('camera-reset').addEventListener('click', () => { club?.setCameraMode('overview', true); void saveSettings({ cameraMode: 'overview' }); });
   document.getElementById('camera-orbit').addEventListener('click', () => { void saveSettings({ cameraMode: club?.getSnapshot().selectedCameraMode === 'orbit' ? 'overview' : 'orbit' }); });
@@ -230,25 +378,4 @@
     show.addEventListener('click', () => { document.body.classList.remove('obs'); show.hidden = true; });
   }
 
-  const music = document.getElementById('music');
-  const enableMusic = document.getElementById('enable-music');
-  music.src = '/music/YTSave.to_YouTube_Media_7f-49jDbK10_NONSTOP-VINAHOUSE-2025-VÀO-PHÒNG-BAY-PHẢI-MỞ-BÀI-NÀY-NHẠC-SÀN-BAY-PHÒNG-BASS-CĂN_009_vbr.mp3';
-  music.volume = 0.4; music.autoplay = true; music.loop = true;
-  function hideMusicPrompt() {
-    enableMusic.hidden = true;
-    document.removeEventListener('pointerdown', startMusic); document.removeEventListener('keydown', startMusic);
-  }
-  async function startMusic() {
-    try { await music.play(); hideMusicPrompt(); }
-    catch (failure) {
-      if (failure.name === 'NotAllowedError') {
-        enableMusic.hidden = false;
-        document.addEventListener('pointerdown', startMusic); document.addEventListener('keydown', startMusic);
-      }
-    }
-  }
-  music.addEventListener('play', hideMusicPrompt);
-  enableMusic.addEventListener('click', startMusic);
-  music.addEventListener('error', () => { hideMusicPrompt(); announce('Không tải được nhạc nền. Hãy tải lại trang để thử lại.'); });
-  void startMusic();
 })();

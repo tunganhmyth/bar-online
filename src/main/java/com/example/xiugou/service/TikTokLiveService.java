@@ -25,6 +25,7 @@ public class TikTokLiveService {
     private static final Logger log = LoggerFactory.getLogger(TikTokLiveService.class);
     private final ObjectMapper mapper;
     private final StageSettingsService stageSettings;
+    private final TopGiftersService topGifters;
     private final String node;
     private final Path script;
     private final Set<SseEmitter> clients = ConcurrentHashMap.newKeySet();
@@ -38,11 +39,12 @@ public class TikTokLiveService {
     private Process worker;
     private BufferedWriter commands;
 
-    public TikTokLiveService(ObjectMapper mapper, StageSettingsService stageSettings,
+    public TikTokLiveService(ObjectMapper mapper, StageSettingsService stageSettings, TopGiftersService topGifters,
                             @Value("${tiktok.node:node}") String node,
                             @Value("${tiktok.script:bridge/worker.mjs}") String script) {
         this.mapper = mapper;
         this.stageSettings = stageSettings;
+        this.topGifters = topGifters;
         this.node = node;
         this.script = Paths.get(script).toAbsolutePath();
         state = idleState(null);
@@ -53,6 +55,7 @@ public class TikTokLiveService {
     }
 
     public JsonNode getState() { return state.deepCopy(); }
+    public JsonNode getTopGifters() { return topGifters.get(); }
 
     public synchronized SseEmitter subscribe() {
         SseEmitter client = new SseEmitter(0L);
@@ -63,6 +66,7 @@ public class TikTokLiveService {
         try {
             client.send(SseEmitter.event().data(envelope("state", state)));
             client.send(SseEmitter.event().data(envelope("stage-settings", stageSettings.get())));
+            client.send(SseEmitter.event().data(envelope("top-gifters", topGifters.get())));
         }
         catch (IOException | IllegalStateException error) { removeClient(client); }
         return client;
@@ -119,8 +123,13 @@ public class TikTokLiveService {
                     if (event != null && event.has("type") && event.has("data")) {
                         synchronized (this) {
                             if (worker != process || closing) return;
-                            if ("state".equals(event.path("type").asText())) state = event.path("data").deepCopy();
+                            String type = event.path("type").asText();
+                            boolean ranksChanged = false;
+                            if ("state".equals(type)) { state = event.path("data").deepCopy(); ranksChanged = topGifters.observeState(state); }
+                            else if ("gift".equals(type)) ranksChanged = topGifters.recordGift(event.path("data"));
+                            else if ("chat".equals(type)) ranksChanged = topGifters.observeChat(event.path("data"));
                             broadcast(event);
+                            if (ranksChanged) broadcast(envelope("top-gifters", topGifters.get()));
                         }
                     }
                 } catch (IOException error) { log.warn("Ignored invalid TikTok worker output"); }

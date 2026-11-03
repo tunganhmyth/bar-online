@@ -22,6 +22,9 @@ public class LiveController {
     @GetMapping("/state")
     public JsonNode state() { return live.getState(); }
 
+    @GetMapping("/top-gifters")
+    public JsonNode topGifters() { return live.getTopGifters(); }
+
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter events() { return live.subscribe(); }
 
